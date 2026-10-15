@@ -4,7 +4,7 @@ import bisect
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 import numpy as np
 
@@ -124,3 +124,24 @@ class LineaDeTiempo:
 def semilla_de_clase(clase_id: str, base: int = 0) -> int:
     """Semilla determinista derivada del identificador de la clase (FR-107)."""
     return int.from_bytes(hashlib.sha256(f"{base}:{clase_id}".encode("utf-8")).digest()[:8], "big")
+
+
+def tomas_ciclicas(poses: Sequence[str], visemas: Sequence[Visema], n_frames: int, fps: int, escenario: str,
+                   plano: str, duracion_toma_s: float = 25.0) -> List[Toma]:
+    """Tomas provisionales (hasta que exista el director, T070): recorre las poses en orden y cambia
+    cada ~`duracion_toma_s` segundos, siempre en el inicio de la pausa (visema X) más cercana (±2 s;
+    sin pausa a ese alcance corta en el punto exacto). Determinista: no usa azar."""
+    poses = list(poses)
+    if len(poses) <= 1:
+        return [Toma(0, escenario, poses[0], plano)]
+    n_tomas = max(1, round(n_frames / (duracion_toma_s * fps)))
+    pausas = sorted(v.f0 for v in visemas if v.v == "X" and v.f0 > 0)
+    cortes = [0]
+    for k in range(1, n_tomas):
+        objetivo = round(k * n_frames / n_tomas)
+        cercanas = [f for f in pausas if abs(f - objetivo) <= 2 * fps and f > cortes[-1]]
+        corte = min(cercanas, key=lambda f: abs(f - objetivo)) if cercanas else objetivo
+        if cortes[-1] < corte < n_frames:
+            cortes.append(corte)
+    return [Toma(f0, escenario, poses[i % len(poses)], plano) for i, f0 in enumerate(cortes)]
+

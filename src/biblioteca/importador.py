@@ -14,7 +14,7 @@ IMAGENES = {".png", ".jpg", ".jpeg", ".webp"}
 RE_BOCA = re.compile(r"^P(\d+)_boca_([A-HX])\.png$", re.IGNORECASE)
 RE_OJOS = re.compile(r"^P(\d+)_ojos\.png$", re.IGNORECASE)
 RE_POSE = re.compile(r"^P(\d+)(?:_(.+))?\.png$", re.IGNORECASE)
-RE_ESCENARIO = re.compile(r"^E(\d+)(?:_(.+))?\.(png|jpg|jpeg)$", re.IGNORECASE)
+RE_ESCENARIO = re.compile(r"^E(\d+)(?:_(.+))?\.(png|jpg|jpeg|mp4)$", re.IGNORECASE)
 EJEMPLO = "P3_explicando.png, P3_boca_A.png, P3_ojos.png o E2_salon.png"
 
 
@@ -57,9 +57,22 @@ def importar(entrada: Path, raiz: Path, personaje: str = "profesor") -> InformeI
     poses = raiz / "personajes" / personaje / "poses"
     informe = InformeImportacion()
     for archivo in sorted(entrada.iterdir()):
-        if not archivo.is_file() or archivo.name.startswith(".") or archivo.suffix.lower() not in IMAGENES:
+        es_video = archivo.suffix.lower() == ".mp4"
+        if not archivo.is_file() or archivo.name.startswith(".") or (archivo.suffix.lower() not in IMAGENES and not es_video):
             continue
         nombre = archivo.name
+        if es_video:                                  # escenario en video (FR-057): E<n>_nombre.mp4 -> fondo.mp4
+            m = RE_ESCENARIO.match(nombre)
+            if not m:
+                informe.rechazados.append(Rechazo(
+                    nombre, "los videos solo se admiten como escenarios y el nombre debe ser E<n>_nombre.mp4 "
+                            "(por ejemplo E2_calle.mp4)"))
+                continue
+            carpeta = raiz / "escenarios" / (f"E{m.group(1)}_{m.group(2)}" if m.group(2) else f"E{m.group(1)}")
+            carpeta.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(archivo, carpeta / "fondo.mp4")
+            informe.importados.append(f"{nombre} -> {(carpeta / 'fondo.mp4').relative_to(raiz)}")
+            continue
         datos = _leer(archivo)
         if datos is None:
             informe.rechazados.append(Rechazo(nombre, "no se pudo leer como imagen; reexpórtala como PNG"))

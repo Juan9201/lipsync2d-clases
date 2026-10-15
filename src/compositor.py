@@ -4,7 +4,7 @@ from typing import Sequence, Tuple
 
 from PIL import Image
 
-from src.layers.base import BaseLayer, ContextoFrame
+from src.layers.base import BaseLayer, CapaRGBA, ContextoFrame
 
 
 class Compositor:
@@ -21,12 +21,13 @@ class Compositor:
             res = capa.renderizar(ctx)
             if res is None:
                 continue
-            img, x, y = res.imagen, res.x, res.y
-            # Recorte a la zona visible (alpha_composite no admite destinos fuera del lienzo)
-            x0, y0 = max(x, 0), max(y, 0)
-            x1, y1 = min(x + img.width, ancho), min(y + img.height, alto)
-            if x1 <= x0 or y1 <= y0:
-                continue
-            visible = img.crop((x0 - x, y0 - y, x1 - x, y1 - y))
-            base.alpha_composite(visible, dest=(x0, y0))
+            for parte in ((res,) if isinstance(res, CapaRGBA) else res):     # una capa puede aportar varias imágenes
+                img, x, y = parte.imagen, parte.x, parte.y
+                # Recorte a la zona visible (alpha_composite no admite destinos fuera del lienzo)
+                x0, y0 = max(x, 0), max(y, 0)
+                x1, y1 = min(x + img.width, ancho), min(y + img.height, alto)
+                if x1 <= x0 or y1 <= y0:
+                    continue
+                visible = img.crop((x0 - x, y0 - y, x1 - x, y1 - y))
+                base.alpha_composite(visible, dest=(x0, y0))
         return base.convert("RGB")

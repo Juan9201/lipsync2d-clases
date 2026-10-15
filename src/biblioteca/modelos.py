@@ -9,6 +9,13 @@ import yaml
 from src.errores import AssetInvalido
 
 _NOMBRE_CARPETA = re.compile(r"^([PE])(\d+)(?:_(.+))?$")
+# Poses de la v3: <vista>_<gesto>_<NN>, p. ej. frontal_neutro_01 o tres_cuartos_der_explicar_01.
+# La vista puede llevar guiones bajos; el gesto no (puede llevar tildes, p. ej. señalar).
+_NOMBRE_POSE_V3 = re.compile(r"^(?P<vista>.+?)_(?P<gesto>[^_]+)_(?P<nn>\d+)$")
+TIPOS_GESTO = ("estado", "acento")
+# Gestos de acento (breves: vuelven solos al reposo); el resto son estados
+GESTOS_DE_ACENTO = frozenset({"pulgar", "señalar", "bienvenida", "contar"})
+VISEMAS_FORMA = "ABCDEFGHX"
 
 
 @dataclass(frozen=True)
@@ -24,6 +31,18 @@ class Anclas:
     boca: Ancla
     ojos: Ancla
     cabeza: Ancla
+
+
+@dataclass(frozen=True)
+class FormaBoca:
+    """Calibración de UNA forma de boca en una pose (FR-062): centro del dibujo en el lienzo de la
+    pose, escala (píxeles del lienzo por píxel del sprite), giro en grados (positivo = sentido
+    horario, como en los calibradores) y reflejo propio de la forma."""
+    x: float
+    y: float
+    s: float
+    r: float = 0.0
+    m: bool = False
 
 
 @dataclass(frozen=True)
@@ -60,6 +79,21 @@ class Pose:
     ruta: Path
     respaldo: bool = False   # FR-083: imagen completa como capa base, toma fija
     ojos_de: Optional[str] = None   # reutiliza los ojos cerrados de otra pose (misma cara, con o sin gafas)
+    # --- v3: poses por vista y gesto con calibración de boca por forma ---
+    vista: str = ""
+    gesto: str = ""
+    tipo: str = ""                                   # "estado" o "acento"
+    variante: int = 0
+    formas: Optional[Dict[str, FormaBoca]] = None    # None = pose antigua con un solo ancla de boca
+    pelo: Optional[Tuple[float, float]] = None       # centro de la cabeza (alineación en los cortes)
+    parpadeo: bool = False
+
+
+def espejo_de_forma(pose: "Pose", visema: str) -> bool:
+    """Reflejo efectivo de una forma (FR-051): el de la pose y el de la forma se combinan como un
+    «o exclusivo»; con los dos activos la forma vuelve a su orientación original."""
+    forma = (pose.formas or {}).get(visema)
+    return bool(pose.espejo) != bool(forma.m if forma else False)
 
 
 @dataclass(frozen=True)
@@ -100,6 +134,78 @@ def _leer_yaml(ruta: Path) -> dict:
     return datos
 
 
+def _id_pose_v3(carpeta: Path) -> Tuple[str, str, str, int]:
+    m = _NOMBRE_POSE_V3.match(carpeta.name)
+    if not m or not m.group("vista").strip() or " " in carpeta.name:
+        raise AssetInvalido(
+            f"El nombre de la carpeta «{carpeta.name}» no sigue la nomenclatura <vista>_<gesto>_<NN> "
+            "(por ejemplo frontal_neutro_01 o tres_cuartos_der_explicar_01)",
+            "Renómbrala con la vista, el gesto y el número de variante, sin espacios")
+    return carpeta.name, m.group("vista"), m.group("gesto"), int(m.group("nn"))
+
+
+def _formas(d: dict, id_pose: str, ruta: Path) -> Dict[str, FormaBoca]:
+    crudas = d.get("formas")
+    if not isinstance(crudas, dict) or not crudas:
+        raise AssetInvalido(
+            f"La pose {id_pose} no está calibrada: config.yaml no tiene «formas» de boca",
+            "Calíbrala con el calibrador de bocas (prototipos/calibradores/Calibrador4/calibrador_34.html) e "
+            "impórtala con `python -m src.biblioteca importar-poses --calibraciones <archivo.json>`")
+    faltan = [v for v in VISEMAS_FORMA if v not in crudas]
+    if faltan:
+        raise AssetInvalido(
+            f"Faltan formas de boca en la calibración de la pose {id_pose}: {', '.join(faltan)}",
+            f"Calibra las 9 formas (A–H y X) y vuelve a importar la calibración en {ruta}")
+    try:
+        return {v: FormaBoca(float(crudas[v]["x"]), float(crudas[v]["y"]), float(crudas[v]["s"]),
+                             float(crudas[v].get("r", 0.0)), bool(crudas[v].get("m", False)))
+                for v in VISEMAS_FORMA}
+    except (KeyError, TypeError, ValueError) as exc:
+        raise AssetInvalido(f"Una forma de boca de la pose {id_pose} es inválida (necesita x, y y s numéricos)",
+                            f"Revisa «formas» en {ruta}") from exc
+
+
+def _cargar_pose_v3(carpeta: Path, d: dict, cfg_ruta: Path) -> Pose:
+    id_carpeta, vista, gesto, variante = _id_pose_v3(carpeta)
+    if d.get("id") != id_carpeta:
+        raise AssetInvalido(
+            f"El id «{d.get('id')}» de config.yaml no coincide con la carpeta {carpeta.name} ({id_carpeta})",
+            "Haz que el id y el nombre de la carpeta coincidan")
+    tipo = str(d.get("tipo") or ("acento" if gesto in GESTOS_DE_ACENTO else "estado"))
+    if tipo not in TIPOS_GESTO:
+        raise AssetInvalido(f"El tipo «{tipo}» de la pose {id_carpeta} no es válido",
+                            "Usa «estado» (puede mantenerse mucho tiempo) o «acento» (breve) en config.yaml")
+    try:
+        lienzo = (int(d["lienzo"][0]), int(d["lienzo"][1]))
+    except (KeyError, TypeError, ValueError, IndexError) as exc:
+        raise AssetInvalido("Falta «lienzo» ([ancho, alto]) en config.yaml de la pose",
+                            f"Añádelo en {cfg_ruta}") from exc
+    formas = _formas(d, id_carpeta, cfg_ruta)
+    a = formas["A"]
+    # La cabeza (centro de la ventana de los planos) se deriva de la boca A salvo que config.yaml la fije
+    try:
+        cab = d["anclas"]["cabeza"]
+        cabeza = Ancla(float(cab["x"]), float(cab["y"]))
+    except (KeyError, TypeError, ValueError):
+        cabeza = Ancla(a.x, a.y - 0.058 * lienzo[1])
+    anclas = Anclas(Ancla(a.x, a.y), Ancla(cabeza.x, cabeza.y), cabeza)
+    planos = dict(PLANOS_DEFECTO)
+    for codigo, v in (d.get("planos") or {}).items():
+        base = PLANOS_DEFECTO.get(codigo)
+        if base is None:
+            raise AssetInvalido(f"Plano desconocido «{codigo}» en config.yaml", "Usa PL1 a PL6")
+        planos[codigo] = Plano(float(v.get("alto_relativo", base.alto_relativo)),
+                               float(v.get("centro_y_relativo", base.centro_y_relativo)),
+                               float(v.get("desenfoque", base.desenfoque)))
+    mov = d.get("movimiento") or {}
+    pelo = d.get("pelo")
+    return Pose(id_carpeta, str(d.get("nombre") or f"{gesto} {variante:02d}"), lienzo, bool(d.get("espejo", False)),
+                d.get("bocas_de"), anclas, planos,
+                Movimiento(float(mov.get("respiracion_escala", 0.0)), float(mov.get("cabeza_px", 0.0))), carpeta,
+                False, d.get("ojos_de"), vista, gesto, tipo, variante, formas,
+                (float(pelo[0]), float(pelo[1])) if pelo else None, bool(d.get("parpadeo", False)))
+
+
 def _ancla(datos: dict, nombre: str, lienzo: Tuple[int, int], ruta: Path) -> Ancla:
     try:
         d = datos["anclas"][nombre]
@@ -116,8 +222,15 @@ def _ancla(datos: dict, nombre: str, lienzo: Tuple[int, int], ruta: Path) -> Anc
 
 def cargar_pose(carpeta: Path) -> Pose:
     carpeta = Path(carpeta)
-    id_carpeta, nombre_carpeta = _id_y_nombre(carpeta, "P")
     cfg_ruta = carpeta / "config.yaml"
+    if re.match(r"^P\d+(_|$)", carpeta.name) is None:
+        # Nomenclatura de la v3 (<vista>_<gesto>_<NN>); un nombre inválido explica cómo corregirlo
+        _id_pose_v3(carpeta)
+        if not cfg_ruta.is_file():
+            raise AssetInvalido(f"No se encontró config.yaml en {carpeta}",
+                                "Importa la pose con `python -m src.biblioteca importar-poses`")
+        return _cargar_pose_v3(carpeta, _leer_yaml(cfg_ruta), cfg_ruta)
+    id_carpeta, nombre_carpeta = _id_y_nombre(carpeta, "P")
     if not cfg_ruta.is_file():
         raise AssetInvalido(f"No se encontró config.yaml en {carpeta}",
                             "Crea la configuración de la pose (ver contracts/config-pose-escenario.md)")

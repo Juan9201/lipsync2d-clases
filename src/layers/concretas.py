@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 
-from src.biblioteca.modelos import Anclas, Pose
+from src.biblioteca.modelos import Anclas, Pose, espejo_de_forma
 from src.biblioteca.validacion import VISEMAS, carpeta_fuente_bocas, carpeta_fuente_ojos
 from src.layers.base import CapaRGBA, ContextoFrame
 from src.layers.camara import Ventana
@@ -40,12 +40,19 @@ class AnclasEstaticas:
 
 
 def _recortar_y_escalar(img: Image.Image, ventana: Ventana, lienzo: Tuple[int, int],
-                        salida: Tuple[int, int]) -> Image.Image:
+                        salida: Tuple[int, int], desplazamiento: Tuple[float, float] = (0.0, 0.0)) -> Image.Image:
     """Recorta `ventana` (en coordenadas de lienzo) de `img`, sea cual sea su tamaño, y la
-    lleva a `salida`."""
+    lleva a `salida`. Con `desplazamiento` (píxeles de lienzo) el contenido se mueve esa cantidad
+    (alineación de cabezas, FR-059): si eso saca la ventana de la imagen, los bordes se replican
+    para no dejar huecos (p. ej. el cuerpo cortado por el borde inferior)."""
     sx, sy = img.width / lienzo[0], img.height / lienzo[1]
-    caja = (ventana.x0 * sx, ventana.y0 * sy, (ventana.x0 + ventana.w) * sx, (ventana.y0 + ventana.h) * sy)
-    return img.resize(salida, Image.LANCZOS, box=caja)
+    x0, y0 = (ventana.x0 - desplazamiento[0]) * sx, (ventana.y0 - desplazamiento[1]) * sy
+    x1, y1 = x0 + ventana.w * sx, y0 + ventana.h * sy
+    if x0 >= 0 and y0 >= 0 and x1 <= img.width and y1 <= img.height:
+        return img.resize(salida, Image.LANCZOS, box=(x0, y0, x1, y1))
+    m = int(max(-x0, -y0, x1 - img.width, y1 - img.height, 0)) + 3
+    relleno = Image.fromarray(np.pad(np.asarray(img), ((m, m), (m, m), (0, 0)), mode="edge"), img.mode)
+    return relleno.resize(salida, Image.LANCZOS, box=(x0 + m, y0 + m, x1 + m, y1 + m))
 
 
 class FondoLayer:
@@ -64,9 +71,10 @@ class FondoLayer:
 
 
 class CuerpoLayer:
-    def __init__(self, pose: Pose, ventana: Ventana, salida: Tuple[int, int]):
+    def __init__(self, pose: Pose, ventana: Ventana, salida: Tuple[int, int],
+                 desplazamiento: Tuple[float, float] = (0.0, 0.0)):
         with Image.open(pose.ruta / "cuerpo.png") as im:
-            cuerpo = _recortar_y_escalar(im.convert("RGBA"), ventana, pose.lienzo, salida)
+            cuerpo = _recortar_y_escalar(im.convert("RGBA"), ventana, pose.lienzo, salida, desplazamiento)
         self._capa = CapaRGBA(cuerpo, 0, 0)
         self._esc = ventana.escala(salida[0])
         self._variantes: Dict[int, Image.Image] = {}
@@ -100,22 +108,24 @@ class CuerpoLayer:
 class _SpriteLayer:
     """Base de las capas de boca y ojos: un sprite escalado y girado sobre un ancla."""
 
-    def __init__(self, pose: Pose, proveedor, ventana: Ventana, salida: Tuple[int, int]):
+    def __init__(self, pose: Pose, proveedor, ventana: Ventana, salida: Tuple[int, int],
+                 desplazamiento: Tuple[float, float] = (0.0, 0.0)):
         self._pose = pose
         self._prov = proveedor
+        self._off = desplazamiento          # alineación de cabezas: mueve la boca junto con el cuerpo
         self._v = ventana
         self._esc = ventana.escala(salida[0])
         self._alto = salida[1]
         self._cache: Dict[tuple, Image.Image] = {}
 
     def _sprite(self, clave: str, original: Image.Image, ancho_lienzo: float, angulo: float,
-                escala_extra: float = 1.0) -> Image.Image:
+                escala_extra: float = 1.0, espejo: bool = False) -> Image.Image:
         escala_extra = cuantizar_escala(escala_extra)
-        k = (clave, round(ancho_lienzo, 2), round(angulo, 2), round(escala_extra, 4))
+        k = (clave, round(ancho_lienzo, 2), round(angulo, 2), round(escala_extra, 4), espejo)
         if k not in self._cache:
             ancho = max(1, round(ancho_lienzo * self._esc * escala_extra))
             alto = max(1, round(original.height * ancho / original.width))
-            img = original.resize((ancho, alto), Image.LANCZOS)
+            img = (ImageOps.mirror(original) if espejo else original).resize((ancho, alto), Image.LANCZOS)
             if angulo:
                 img = img.rotate(angulo, resample=Image.BICUBIC, expand=True)   # antihorario
             self._cache[k] = img
@@ -123,6 +133,7 @@ class _SpriteLayer:
 
     def _colocar(self, img: Image.Image, x: float, y: float, ctx: ContextoFrame) -> CapaRGBA:
         # Misma transformación que el cuerpo: escala respecto al pivote inferior + desplazamiento
+        x, y = x + self._off[0], y + self._off[1]
         px = (self._pose.anclas.cabeza.x - self._v.x0) * self._esc
         py = float(self._alto)
         escala = cuantizar_escala(ctx.escala)
@@ -133,24 +144,33 @@ class _SpriteLayer:
 
 
 class BocaLayer(_SpriteLayer):
-    def __init__(self, pose, proveedor, ventana, salida):
-        super().__init__(pose, proveedor, ventana, salida)
+    def __init__(self, pose, proveedor, ventana, salida, desplazamiento=(0.0, 0.0)):
+        super().__init__(pose, proveedor, ventana, salida, desplazamiento)
         carpeta = carpeta_fuente_bocas(pose) / "bocas"
         self._bocas = {v: Image.open(carpeta / f"{v}.png").convert("RGBA") for v in VISEMAS}
 
     def renderizar(self, ctx: ContextoFrame) -> Optional[CapaRGBA]:
+        if self._pose.formas is not None:
+            # v3 (FR-062): cada forma tiene su propio centro, escala, giro y reflejo; r es horario
+            f = self._pose.formas[ctx.visema]
+            original = self._bocas[ctx.visema]
+            img = self._sprite("boca" + ctx.visema, original, original.width * f.s, -f.r, ctx.escala,
+                               espejo_de_forma(self._pose, ctx.visema))
+            return self._colocar(img, f.x, f.y, ctx)
         a = self._prov.anclas(ctx.n_frame, self._pose.id).boca
         img = self._sprite("boca" + ctx.visema, self._bocas[ctx.visema], a.ancho, a.angulo, ctx.escala)
         return self._colocar(img, a.x, a.y, ctx)
 
 
 class OjosLayer(_SpriteLayer):
-    def __init__(self, pose, proveedor, ventana, salida):
-        super().__init__(pose, proveedor, ventana, salida)
-        self._ojos = Image.open(carpeta_fuente_ojos(pose) / "ojos_cerrados.png").convert("RGBA")
+    def __init__(self, pose, proveedor, ventana, salida, desplazamiento=(0.0, 0.0)):
+        super().__init__(pose, proveedor, ventana, salida, desplazamiento)
+        ruta = carpeta_fuente_ojos(pose) / "ojos_cerrados.png"
+        # Las poses de la v3 parpadean con una imagen propia (T100), no con este parche: sin parche, sin parpadeo
+        self._ojos = Image.open(ruta).convert("RGBA") if ruta.is_file() or pose.formas is None else None
 
     def renderizar(self, ctx: ContextoFrame) -> Optional[CapaRGBA]:
-        if not ctx.parpadeando:
+        if not ctx.parpadeando or self._ojos is None:
             return None
         a = self._prov.anclas(ctx.n_frame, self._pose.id).ojos
         img = self._sprite("ojos", self._ojos, a.ancho, a.angulo, ctx.escala)

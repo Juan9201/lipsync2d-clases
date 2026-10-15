@@ -28,3 +28,6 @@ Temp Real Assest Testing/
 .env
 .env.*
 *.key
+
+# Respaldo para Drive (zips pesados)
+respaldo_drive/

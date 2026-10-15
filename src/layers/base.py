@@ -1,7 +1,7 @@
 """Interfaces de capa y de anclas (P7): el compositor solo depende de esto, no de capas
 concretas, para poder añadir en la Fase 2 una VideoLoopLayer y anclas por frame."""
 from dataclasses import dataclass
-from typing import Optional, Protocol, Tuple
+from typing import Optional, Protocol, Sequence, Tuple, Union
 
 from PIL import Image
 
@@ -30,7 +30,8 @@ class CapaRGBA:
 
 
 class BaseLayer(Protocol):
-    def renderizar(self, ctx: ContextoFrame) -> Optional[CapaRGBA]: ...
+    def renderizar(self, ctx: ContextoFrame) -> Union[None, CapaRGBA, Sequence[CapaRGBA]]:
+        """Una imagen, varias (se apilan en orden) o None si la capa no se ve en este frame."""
 
 
 class ProveedorAnclas(Protocol):

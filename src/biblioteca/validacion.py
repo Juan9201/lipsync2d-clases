@@ -54,6 +54,21 @@ def carpeta_fuente_ojos(pose: Pose) -> Path:
     return carpeta_fuente_bocas(pose)
 
 
+def _validar_pose_v3(pose: Pose, fuente: Path) -> Pose:
+    """Poses de la v3 (FR-061, FR-067): cada forma tiene su propia calibración de tamaño, así que las
+    bocas pueden medir distinto; sí deben existir, ser PNG con transparencia y ser de la misma vista."""
+    if pose.bocas_de:
+        dueña = cargar_pose(fuente)
+        if dueña.vista != pose.vista:
+            raise AssetInvalido(
+                f"La pose {pose.id} es de la vista «{pose.vista}» pero usa las bocas de {pose.bocas_de}, "
+                f"que son de la vista «{dueña.vista}»",
+                "Cada vista tiene su propio juego de bocas: apunta «bocas_de» a una pose de la misma vista")
+    for v in VISEMAS:
+        _abrir_png_rgba(fuente / "bocas" / f"{v}.png", f"boca {v}")
+    return pose
+
+
 def validar_pose(carpeta: Path) -> Pose:
     pose = cargar_pose(carpeta)
     tam_cuerpo = _abrir_png_rgba(pose.ruta / "cuerpo.png", "cuerpo de la pose")
@@ -63,6 +78,8 @@ def validar_pose(carpeta: Path) -> Pose:
             f"{pose.lienzo[0]}x{pose.lienzo[1]} (tamaño distinto)",
             "Exporta el cuerpo con el tamaño del lienzo o corrige «lienzo» en config.yaml")
     fuente = carpeta_fuente_bocas(pose)
+    if pose.formas is not None:
+        return _validar_pose_v3(pose, fuente)
     _abrir_png_rgba(carpeta_fuente_ojos(pose) / "ojos_cerrados.png", "ojos cerrados")
     tamanos = {v: _abrir_png_rgba(fuente / "bocas" / f"{v}.png", f"boca {v}") for v in VISEMAS}
     referencia = tamanos["A"]
@@ -77,19 +94,24 @@ def validar_pose(carpeta: Path) -> Pose:
 
 def validar_escenario(carpeta: Path, salida: Optional[Tuple[int, int]] = None) -> Path:
     carpeta = Path(carpeta)
-    fondo = next((carpeta / n for n in ("fondo.png", "fondo.jpg") if (carpeta / n).is_file()), None)
+    fondo = next((carpeta / n for n in ("fondo.png", "fondo.jpg", "fondo.mp4") if (carpeta / n).is_file()), None)
     if fondo is None:
-        raise AssetInvalido(f"Falta fondo.png en {carpeta.name}",
-                            "Sube la imagen del escenario (ver assets/README.md)")
-    try:
-        with Image.open(fondo) as im:
-            ancho, alto = im.size
-    except (UnidentifiedImageError, OSError) as exc:
-        raise AssetInvalido(f"No se pudo leer {fondo.name} como imagen ({exc})",
-                            "Vuelve a exportarla como PNG o JPG") from exc
+        raise AssetInvalido(f"Falta fondo.png (o fondo.mp4) en {carpeta.name}",
+                            "Sube la imagen o el video del escenario (ver assets/README.md)")
+    if fondo.suffix.lower() == ".mp4":                      # escenario en video (FR-057)
+        from src.layers.fondo_video import _sondear
+        info = _sondear(fondo)
+        ancho, alto = info["ancho"], info["alto"]
+    else:
+        try:
+            with Image.open(fondo) as im:
+                ancho, alto = im.size
+        except (UnidentifiedImageError, OSError) as exc:
+            raise AssetInvalido(f"No se pudo leer {fondo.name} como imagen ({exc})",
+                                "Vuelve a exportarla como PNG o JPG") from exc
     if abs(ancho / alto - 16 / 9) > 0.01 * (16 / 9):
         raise AssetInvalido(f"El escenario mide {ancho}x{alto} y no es 16:9",
-                            "Recórtalo o amplíalo a 16:9 (por ejemplo 3840x2160)")
+                            "Recórtalo o amplíalo a 16:9 (por ejemplo 3840x2160, o 1920x1080 si es un video)")
     if salida and (ancho < salida[0] or alto < salida[1]):
         log.warning("El escenario %s (%dx%d) es menor que la salida %dx%d; se ampliará",
                     carpeta.name, ancho, alto, *salida)
