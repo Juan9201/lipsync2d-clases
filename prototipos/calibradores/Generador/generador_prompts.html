@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generador de prompts 3/4</title>
+<style>
+  :root { --bg:#14161a; --panel:#1e2127; --borde:#343942; --texto:#e8eaed; --suave:#9aa3ad; --acento:#4cc2ff; --ok:#6fd08c; --aviso:#ffcf70; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--texto); font:15px/1.5 system-ui,Segoe UI,sans-serif; }
+  header { padding:14px 18px; border-bottom:1px solid var(--borde); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  .insignia { background:#12324a; color:var(--acento); border:1px solid #1d5a85; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; }
+  main { max-width:1100px; margin:0 auto; padding:16px; display:grid; grid-template-columns: 360px minmax(0,1fr); gap:16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--borde); border-radius:10px; padding:14px; margin-bottom:14px; }
+  .panel h2 { font-size:12px; margin:0 0 10px; color:var(--suave); font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+  label.opcion { display:flex; gap:10px; align-items:flex-start; padding:8px 10px; border:1px solid var(--borde); border-radius:8px; margin-bottom:8px; cursor:pointer; }
+  label.opcion:hover { border-color:var(--acento); }
+  label.opcion.sel { border-color:var(--acento); background:#162b3b; }
+  label.opcion small { display:block; color:var(--suave); }
+  select { width:100%; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:8px; font:inherit; }
+  .chip { display:inline-block; font-size:11px; border-radius:999px; padding:1px 8px; margin-left:6px; border:1px solid var(--borde); color:var(--suave); }
+  .chip.acento { color:var(--aviso); border-color:#6b5520; }
+  .chip.estado { color:var(--ok); border-color:#2d5b3b; }
+  textarea { width:100%; height:430px; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:8px; padding:12px; font:13px/1.5 ui-monospace,Consolas,monospace; resize:vertical; }
+  button { background:var(--acento); color:#001018; border:0; border-radius:8px; padding:10px 16px; cursor:pointer; font:inherit; font-weight:700; }
+  button.sec { background:#272b33; color:var(--texto); border:1px solid var(--borde); font-weight:500; }
+  .fila { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .nota { color:var(--suave); font-size:13px; }
+  .ok { color:var(--ok); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td { padding:5px 6px; border-bottom:1px solid var(--borde); vertical-align:top; }
+  td:first-child { color:var(--suave); width:38%; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Generador de prompts para Higgsfield</h1>
+  <span class="insignia">Vista fija: 3/4</span>
+</header>
+<main>
+  <section>
+    <div class="panel">
+      <h2>1 · Qué vas a generar</h2>
+      <label class="opcion" id="optRotar"><input type="radio" name="modo" value="rotar">
+        <span><b>Cabeza maestra 3/4</b> (la primera vez)<small>Gira a todo el personaje a 3/4 desde la pose frontal. Se hace una sola vez y se aprueba.</small></span></label>
+      <label class="opcion" id="optBocas"><input type="radio" name="modo" value="bocas">
+        <span><b>Bocas 3/4</b> (desde el juego frontal)<small>Convierte las bocas de frente a una vista 3/4. Para el otro lado se reflejan, sin generar de nuevo.</small></span></label>
+      <label class="opcion" id="optParpadeo"><input type="radio" name="modo" value="parpadeo">
+        <span><b>Ojos cerrados (parpadeo)</b><small>Cierra los ojos de una pose ya aprobada sin cambiar nada más. Es la imagen que usa el parpadeo.</small></span></label>
+      <label class="opcion" id="optGesto"><input type="radio" name="modo" value="gesto" checked>
+        <span><b>Gesto nuevo en 3/4</b><small>Cambia el torso con la cabeza 3/4 congelada.</small></span></label>
+    </div>
+    <div class="panel" id="panelGesto">
+      <h2>2 · Tipo de gesto (torso)</h2>
+      <select id="gesto"></select>
+      <div class="nota" id="notaGesto" style="margin-top:8px"></div>
+    </div>
+    <div class="panel" id="panelCeja">
+      <h2>3 · Tipo de ceja</h2>
+      <select id="ceja"></select>
+      <div class="nota" id="notaCeja" style="margin-top:8px"></div>
+    </div>
+    <div class="panel" id="panelParpadeo" style="display:none">
+      <h2>2 · Tipo de parpadeo</h2>
+      <select id="parpadeo">
+        <option value="cerrados">Ojos cerrados del todo (el frame principal)</option>
+        <option value="medios">Ojos a medio cerrar (frame intermedio, más suave)</option>
+      </select>
+      <div class="nota" style="margin-top:8px">Hazlo con la imagen de la pose como referencia. Nómbrala <b>&lt;nombre de la pose&gt;_parpadeo.png</b> (y <b>_parpadeo_medio.png</b> el intermedio), en la misma carpeta que la pose.</div>
+    </div>
+    <div class="panel" id="panelBocas" style="display:none">
+      <h2>2 · Alcance de las bocas</h2>
+      <select id="alcance">
+        <option value="hoja">Hoja completa: las 9 formas a la vez (más coherentes entre sí)</option>
+        <option value="una">Una sola forma (si la hoja sale mal)</option>
+      </select>
+      <div id="filaVisema" style="display:none;margin-top:10px"><select id="visema"></select></div>
+      <div class="nota" style="margin-top:8px">Genera con el lado de la sección 4. Para el lado contrario, el sistema refleja las bocas.</div>
+    </div>
+    <div class="panel" id="panelLado">
+      <h2>4 · Hacia dónde gira (3/4)</h2>
+      <select id="lado">
+        <option value="left">Hacia la IZQUIERDA del espectador</option>
+        <option value="right">Hacia la DERECHA del espectador</option>
+      </select>
+      <div class="nota" style="margin-top:8px">La vista siempre es 3/4; solo eliges el lado. Mantén el mismo lado en todas las poses de una clase.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="panel">
+      <h2>Ajustes en Higgsfield</h2>
+      <table id="ajustes"></table>
+    </div>
+    <div class="panel">
+      <h2>Prompt (se actualiza solo)</h2>
+      <textarea id="prompt" readonly spellcheck="false"></textarea>
+      <div class="fila">
+        <button id="copiar">Copiar prompt</button>
+        <span id="estado" class="nota"></span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Al recibir la imagen</h2>
+      <div class="nota" id="siguiente"></div>
+    </div>
+  </section>
+</main>
+<script>
+const GESTOS = [
+  { id:"neutro", tipo:"estado", texto:"standing relaxed, both arms down at the sides" },
+  { id:"explicar", tipo:"estado", texto:"both hands open in front of the waist, palms up, explaining" },
+  { id:"pulgar", tipo:"acento", texto:"one hand giving a thumbs up at shoulder height, the other arm relaxed" },
+  { id:"señalar", tipo:"acento", texto:"one arm extended to the side pointing with the index finger, the other arm relaxed" },
+  { id:"bienvenida", tipo:"acento", texto:"both arms open wide at the sides, welcoming, palms forward" },
+  { id:"pregunta", tipo:"estado", texto:"one hand raised at chest height with the palm up, as if asking a question, the other arm relaxed" },
+  { id:"contar", tipo:"acento", texto:"one hand raised at chest height showing three fingers, the other arm relaxed" },
+  { id:"libreta", tipo:"estado", texto:"holding a black notebook against the chest with both hands" }
+];
+const CEJAS = [
+  { id:"mantener", nombre:"Mantener las cejas actuales", texto:null },
+  { id:"amigable", nombre:"Amigable (recomendada)", texto:"relaxed and softly arched, the inner ends slightly raised, the outer ends gently curving down, a friendly open expression" },
+  { id:"entusiasta", nombre:"Entusiasta", texto:"both eyebrows raised high and arched, inner ends lifted, an enthusiastic and surprised expression" },
+  { id:"curiosa", nombre:"Curiosa", texto:"the right eyebrow slightly raised and arched, the left eyebrow relaxed, a curious expression" }
+];
+const VISEMAS = [
+  { id:"A", texto:"lips closed and pressed together (P, B, M)" },
+  { id:"B", texto:"slightly open with the teeth together (K, S, T, i)" },
+  { id:"C", texto:"open at mid height (e)" },
+  { id:"D", texto:"very open, the widest of the set (a)" },
+  { id:"E", texto:"rounded and open at mid height (o)" },
+  { id:"F", texto:"small and rounded (u, w)" },
+  { id:"G", texto:"upper teeth resting on the lower lip (f, v)" },
+  { id:"H", texto:"open with the tongue raised behind the upper teeth (l)" },
+  { id:"X", texto:"neutral closed rest" }
+];
+const $ = id => document.getElementById(id);
+GESTOS.forEach((g, i) => { const o = document.createElement("option"); o.value = g.id; o.textContent = `${g.id} (${g.tipo})`; $("gesto").appendChild(o); });
+CEJAS.forEach(c => { const o = document.createElement("option"); o.value = c.id; o.textContent = c.nombre; $("ceja").appendChild(o); });
+$("ceja").value = "amigable";
+VISEMAS.forEach(v => { const o = document.createElement("option"); o.value = v.id; o.textContent = v.id + " · " + v.texto; $("visema").appendChild(o); });
+
+const PIE = `Keep the exact same canvas size. Everything outside the character is fully transparent (alpha 0): no background, no floor shadow, no halo, crisp edges. No extra text besides the existing logo, no watermark, no extra people, no new props unless the pose says so.`;
+const ROPA = `Keep the same character and clothes: white shirt with the same green and blue logo, black belt, dark gray trousers, the same line weight, colors and soft frontal light.`;
+
+function lado() { return $("lado").value === "left" ? "LEFT" : "RIGHT"; }
+
+function promptRotar(g, c) {
+  const L = lado();
+  const cejas = c.texto
+    ? `The eyebrows get a new style: ${c.texto}. Keep the same eyebrow color, thickness and black ink line style; remove any frown, so the skin between the eyebrows is smooth.`
+    : `Keep the eyebrows as they are in the attached image.`;
+  return `Edit the attached image. It is a 2D comic teacher shown from the FRONT on a transparent 16:9 canvas.
+
+Redraw the WHOLE CHARACTER in a THREE-QUARTER VIEW: rotate the head and the body about 35 to 40 degrees around the vertical axis, as if on a turntable, so he faces toward the viewer's ${L}. The vertical axis of the figure, the head height and the overall scale stay the same as in the attached image, and the figure fills the canvas in the same way. Camera frontal at normal height, no tilt, no extra perspective distortion beyond the rotation.
+
+Keep the exact same character: same hair style and color, glasses, ears, eyes, nose, skin tone and necklace. The face keeps NO mouth: smooth plain skin between the nose and the chin, with no lips, no mustache and no goatee. ${cejas}
+
+${ROPA} The shirt logo follows the rotation of the chest and is never mirrored.
+
+Body pose: ${g.texto}. Seen in the same three-quarter view. No hand or arm may overlap, touch or cover the head or face.
+
+${PIE}`;
+}
+
+function promptGesto(g, c) {
+  const L = lado();
+  const cambio2 = c.texto ? "Make exactly two changes and nothing else: (1) the eyebrows, (2) the body pose." : "Make exactly one change and nothing else: the body pose.";
+  const excepcion = c.texto ? ", with ONE exception" : "";
+  const bloqueCejas = c.texto
+    ? `CHANGE 1, THE EYEBROWS ONLY. New eyebrow style: ${c.texto}. Keep the same eyebrow color, thickness and black ink line style. Keep both eyebrows symmetrical, in roughly the same position above the glasses, without touching or overlapping the glasses frame. Remove the frown: the inner ends must no longer slope down toward the nose and the crease lines between the eyebrows must disappear, leaving that skin smooth.\n\n`
+    : "";
+  const num = c.texto ? "CHANGE 2, THE BODY BELOW THE CHIN" : "CHANGE, THE BODY BELOW THE CHIN";
+  return `Edit the attached image. It is a 2D comic teacher in a THREE-QUARTER VIEW, facing toward the viewer's ${L}, on a transparent 16:9 canvas. ${cambio2}
+
+HEAD LOCK${excepcion}. Everything from the top of the hair down to the bottom of the chin must stay exactly as in the attached image, pixel for pixel: same position, same size, same angle, same three-quarter turn, same hair, ears, glasses (frame, lenses and reflections), eyes, eyelids, nose, skin color, shading and outline, and the same smooth mouthless lower face. Do not move, rotate, scale, redraw, restyle, relight or sharpen the head. Do not add a mouth, lips, mustache or goatee. The head is locked and immovable.
+
+${bloqueCejas}${num}: the neck, shoulders, torso, arms, hands and the posture of the shirt. New body pose: ${g.texto}. The body stays in the same three-quarter view, turned toward the viewer's ${L}, with the same body axis as the locked head. ${ROPA} The shoulders stay at a believable height directly under the locked head, and the neck joins the head without a seam. No hand or arm may overlap, touch or cover the head or face. Camera frontal at normal height, no perspective change.
+
+${PIE}`;
+}
+
+const GIRO = (L) => `the mouth follows the turn of the face, it is NOT just the frontal drawing squashed: the far corner (on the viewer's ${L === "LEFT" ? "left" : "right"}) is foreshortened and shorter, the near corner (on the viewer's ${L === "LEFT" ? "right" : "left"}) is fuller and wider, the lips curve around the turned face, and the centerline of the mouth bends slightly toward the far side`;
+const ESTILO = `Keep exactly the same drawing style, line weight and colors as the attached image (skin-tone lips with a dark outline, dark mouth interior, white teeth, pink tongue). Do not add a nose, chin, cheeks, hair, glasses, skin outside the mouths, text, numbers or labels. The background stays fully transparent (alpha 0), with crisp edges and no halo.`;
+
+function promptParpadeo() {
+  const medios = $("parpadeo").value === "medios";
+  const accion = medios
+    ? "HALF-CLOSE BOTH EYES: the upper eyelids drop to cover about the upper half of each eye, a natural half blink, with the eyelashes of the upper lid visible and the lower half of each eye still showing"
+    : "CLOSE BOTH EYES: the upper eyelids come all the way down to the lower lid line, a relaxed natural blink, with the eyelashes visible and no part of the iris or the white of the eye showing";
+  return `Edit the attached image. It is a 2D comic teacher on a transparent 16:9 canvas. Make exactly ONE change and nothing else: ${accion}.
+
+EVERYTHING ELSE MUST STAY EXACTLY AS IN THE ATTACHED IMAGE, pixel for pixel: the position, size and angle of the whole head and body; the hair, ears, the glasses (frame, lenses and lens reflections, in the same place, with the eyelids drawn behind the lenses), the eyebrows, the nose, the skin color and shading, the outline, the smooth mouthless lower face, the neck, the shirt and its logo, the arms and the hands. Do not add a mouth. Do not move, rotate, scale, redraw, restyle, relight or sharpen anything except the eyes.
+
+Keep the exact same canvas size. Everything outside the character stays fully transparent (alpha 0), with crisp edges and no halo. No text besides the existing logo, no watermark.`;
+}
+
+function promptBocas() {
+  const L = lado();
+  if ($("alcance").value === "hoja") {
+    return `Edit the attached image. It is a sheet of nine 2D cartoon mouth shapes for lip-sync, drawn in a FRONTAL view on a transparent background, in a 3 by 3 grid.
+
+Redraw ALL NINE mouths in a THREE-QUARTER VIEW, as if the head were turned about 35 degrees toward the viewer's ${L}: ${GIRO(L)}.
+
+Keep the meaning of every shape, in the same order and the same grid positions as in the attached image: A lips closed and pressed together, B slightly open with the teeth together, C open at mid height, D very open (the widest), E rounded and open at mid height, F small and rounded, G upper teeth resting on the lower lip, H open with the tongue raised behind the upper teeth, X neutral closed rest. Keep the same relative sizes between the nine shapes, each one centered in its own cell with a clear margin, with no overlaps between cells.
+
+${ESTILO}`;
+  }
+  const v = VISEMAS.find(x => x.id === $("visema").value);
+  return `Edit the attached image. It is one 2D cartoon mouth shape for lip-sync, drawn in a FRONTAL view on a transparent background: ${v.texto}.
+
+Redraw this SAME mouth in a THREE-QUARTER VIEW, as if the head were turned about 35 degrees toward the viewer's ${L}: ${GIRO(L)}. Keep the meaning of the shape (${v.texto}) and the same size, centered in the image with a clear margin.
+
+${ESTILO}`;
+}
+
+function actualizar() {
+  const modo = document.querySelector('input[name="modo"]:checked').value;
+  const g = GESTOS.find(x => x.id === $("gesto").value), c = CEJAS.find(x => x.id === $("ceja").value);
+  document.querySelectorAll("label.opcion").forEach(l => l.classList.toggle("sel", l.querySelector("input").checked));
+  const esBocas = modo === "bocas", esParp = modo === "parpadeo";
+  $("panelGesto").style.display = $("panelCeja").style.display = (esBocas || esParp) ? "none" : "";
+  $("panelLado").style.display = esParp ? "none" : "";
+  $("panelBocas").style.display = esBocas ? "" : "none";
+  $("panelParpadeo").style.display = esParp ? "" : "none";
+  $("filaVisema").style.display = esBocas && $("alcance").value === "una" ? "" : "none";
+  $("prompt").value = esParp ? promptParpadeo() : esBocas ? promptBocas() : (modo === "rotar" ? promptRotar(g, c) : promptGesto(g, c));
+  $("notaGesto").innerHTML = `Tipo: <span class="chip ${g.tipo}">${g.tipo}</span> ${g.tipo === "acento" ? "· gesto breve, vuelve solo al neutro" : "· puede mantenerse mucho tiempo"}`;
+  $("notaCeja").textContent = c.texto ? c.texto : "No se toca nada de la cara.";
+  let n = 0;
+  document.querySelectorAll("main > section:first-of-type .panel").forEach(p => { if (p.style.display !== "none") { const h = p.querySelector("h2"); h.firstChild.textContent = h.firstChild.textContent.replace(/^\d+ · /, ""); h.firstChild.textContent = `${++n} · ` + h.firstChild.textContent; } });
+  const refer = modo === "parpadeo" ? "La imagen de la pose YA aprobada (personaje sin fondo y sin boca, con los ojos abiertos)" : modo === "rotar" ? "La pose maestra FRONTAL aprobada (personaje sin fondo y sin boca)" : modo === "bocas" ? ($("alcance").value === "hoja" ? "La HOJA frontal de las 9 bocas (la de Cartoon4, con transparencia)" : "La boca frontal de esa forma (PNG con transparencia)") : "La cabeza maestra 3/4 ya APROBADA (la del paso «Cabeza maestra 3/4»)";
+  $("ajustes").innerHTML = [
+    ["Modo", "Edición de imagen (no texto a imagen, no video)"],
+    ["Referencia a adjuntar", refer],
+    ["Modelo", "GPT Image 2.5 si aparece; si no, el de mayor resolución con edición"],
+    ["Tamaño", "Igual al de la referencia"],
+    ["Fondo / salida", "Transparente · PNG"],
+    ["Batch · mejora de prompt", "1 · Off"]
+  ].map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("");
+  $("siguiente").innerHTML = modo === "parpadeo"
+    ? "Guarda el resultado junto a la pose con el sufijo <b>_parpadeo.png</b>. Yo pego solo la zona de los ojos sobre la pose abierta, así que si la IA cambió algo más no pasa nada. Las poses frontales comparten la misma cabeza: con una imagen basta para todas; las 3/4 necesitan una por pose."
+    : modo === "bocas"
+    ? "Pásame la imagen. Recorto las nueve formas, las ordeno como A–H y X y las calibro sobre tus cabezas 3/4 con el calibrador. Para el lado contrario las reflejo automáticamente: no hace falta volver a generar."
+    : modo === "rotar"
+    ? "Revisa que sea 3/4 real, que siga sin boca y que el logo no esté al revés. Si lo apruebas, esa imagen es tu <b>cabeza maestra 3/4</b>: pásamela para calibrar las bocas 3/4. Las bocas frontales no sirven en 3/4."
+    : "Compara que la cabeza no se haya movido respecto a la maestra 3/4. Yo la comparo y, si hace falta, pego encima la cabeza original para que quede idéntica.";
+}
+["gesto", "ceja", "lado", "alcance", "visema", "parpadeo"].forEach(id => $(id).addEventListener("change", actualizar));
+document.querySelectorAll('input[name="modo"]').forEach(r => r.addEventListener("change", actualizar));
+$("copiar").onclick = async () => {
+  try { await navigator.clipboard.writeText($("prompt").value); } catch (e) { $("prompt").select(); document.execCommand("copy"); }
+  $("estado").textContent = "Copiado ✓"; $("estado").className = "nota ok"; setTimeout(() => $("estado").textContent = "", 2500);
+};
+actualizar();
+</script>
+</body>
+</html>

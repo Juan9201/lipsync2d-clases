@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calibrador de boca</title>
+<style>
+  :root { --bg:#14161a; --panel:#1e2127; --borde:#343942; --texto:#e8eaed; --suave:#9aa3ad; --acento:#4cc2ff; --ok:#6fd08c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--texto); font:14px/1.4 system-ui,Segoe UI,sans-serif; }
+  header { padding:10px 16px; border-bottom:1px solid var(--borde); display:flex; gap:16px; align-items:baseline; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  header span { color:var(--suave); }
+  main { display:grid; grid-template-columns: minmax(0,1fr) 340px; gap:12px; padding:12px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  .vistas { display:grid; gap:12px; }
+  canvas { width:100%; height:auto; background:#000; border:1px solid var(--borde); border-radius:6px; display:block; cursor:crosshair; }
+  .panel { background:var(--panel); border:1px solid var(--borde); border-radius:8px; padding:12px; margin-bottom:12px; }
+  .panel h2 { font-size:13px; margin:0 0 8px; color:var(--suave); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .fila { display:flex; align-items:center; gap:8px; margin:6px 0; flex-wrap:wrap; }
+  .fila label.t { width:92px; color:var(--suave); }
+  .fila input[type=number] { width:92px; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:4px; padding:4px 6px; }
+  .fila input[type=range] { flex:1; min-width:80px; }
+  .fila select { background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:4px; padding:4px 6px; }
+  .botones { display:flex; flex-wrap:wrap; gap:6px; }
+  button { background:#272b33; color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--acento); }
+  button.activo { background:var(--acento); color:#001018; border-color:var(--acento); font-weight:700; }
+  textarea { width:100%; height:190px; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:8px; font:12px/1.4 ui-monospace,Consolas,monospace; resize:vertical; }
+  .nota { color:var(--suave); font-size:12px; }
+  .ok { color:var(--ok); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Calibrador de boca</h1>
+  <span>Cada forma se calibra por separado. Arrastra sobre la cara: mueves solo la forma elegida. Flechas = 1 px (Shift = 5 px). Teclas A–H y X cambian de forma.</span>
+</header>
+<main>
+  <div class="vistas">
+    <canvas id="principal" width="1600" height="900"></canvas>
+    <canvas id="zoom" width="1620" height="900"></canvas>
+  </div>
+  <aside>
+    <div class="panel">
+      <h2>Forma que estás calibrando</h2>
+      <div class="botones" id="botonesVisema"></div>
+      <div class="fila" style="margin-top:10px">
+        <button id="anima">▶ Animar secuencia</button>
+        <label><input type="checkbox" id="guias" checked> guías</label>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Posición y tamaño de <span id="nombreForma">A</span> (solo esta)</h2>
+      <div class="fila"><label class="t">Centro X (4K)</label><input type="number" id="px" step="1"></div>
+      <div class="fila"><label class="t">Centro Y (4K)</label><input type="number" id="py" step="1"></div>
+      <div class="fila"><label class="t">Escala</label><input type="range" id="sR" min="0.03" max="0.45" step="0.001"><input type="number" id="sN" step="0.001"></div>
+      <div class="fila"><label class="t">Rotación (°)</label><input type="range" id="rR" min="-30" max="30" step="0.1"><input type="number" id="rN" step="0.1"></div>
+      <div class="nota">Mide el centro del dibujo de esta forma. Rotación positiva = sentido de las agujas del reloj; teclas <b>[</b> y <b>]</b> giran 0,5° (Shift = 2°). Cambiarla no afecta a las demás.</div>
+      <div class="fila" style="margin-top:8px"><button id="reiniciaForma">Reiniciar esta forma</button></div>
+    </div>
+    <div class="panel">
+      <h2>Ayudas</h2>
+      <div class="fila"><label class="t">Fantasma</label>
+        <select id="fantasma"></select><span class="nota">otra forma en tenue, para comparar</span></div>
+      <div class="fila"><label class="t">Vinculadas</label>
+        <label><input type="checkbox" id="vinc"> mover todas a la vez</label></div>
+      <div class="nota">«Vinculadas» desplaza las nueve juntas, útil solo para un ajuste grueso inicial.</div>
+    </div>
+    <div class="panel">
+      <h2>Valores (cópialos y pégalos en el chat)</h2>
+      <textarea id="json" spellcheck="false"></textarea>
+      <div class="fila">
+        <button id="copiar">Copiar</button>
+        <button id="cargar">Cargar lo pegado</button>
+        <button id="todas">Reiniciar todas</button>
+        <span id="estado" class="nota"></span>
+      </div>
+    </div>
+  </aside>
+</main>
+<script src="datos.js"></script>
+<script>
+const VISEMAS = "ABCDEFGHX".split("");
+const CLAVE = "calibrador_boca_v2_" + (typeof NOMBRE_SET !== "undefined" ? NOMBRE_SET : "a");
+// Valores de partida = los de prueba5_busto (centro de cada forma en coordenadas de la escena 4K)
+function porDefecto() {
+  const s = (typeof ESC0 !== 'undefined' ? ESC0 : 0.192), lx = 3087, ly = 583, tA = BOCAS.A.t, o = {};
+  VISEMAS.forEach(v => {
+    const b = BOCAS[v];
+    o[v] = { x: lx + ((b.l + b.w / 2) - LIENZO[0] / 2) * s,
+             y: ly + (tA - LIENZO[1] / 2) * s + b.h * s / 2, s: s, r: 0 };
+  });
+  return o;
+}
+let est = { formas: porDefecto() };
+try { const g = localStorage.getItem(CLAVE); if (g) { const o = JSON.parse(g); if (o.formas) est = o; } } catch (e) {}
+let actual = "A", animando = null;
+
+const escena = new Image(); escena.src = "escena_busto.jpg";
+const imgs = {};
+let pendientes = VISEMAS.length + 1;
+const listo = () => { if (--pendientes === 0) dibujar(); };
+escena.onload = listo;
+VISEMAS.forEach(v => { const i = new Image(); i.onload = listo; i.src = `boca_${v}.png`; imgs[v] = i; });
+
+const $ = id => document.getElementById(id);
+const cv = $("principal"), cx = cv.getContext("2d");
+const cz = $("zoom"), czx = cz.getContext("2d");
+const VX = VENTANA[0], VY = VENTANA[1];
+
+// Rectángulo (coordenadas de la ventana 4K) donde se dibuja la forma v
+function rect(v) {
+  const b = BOCAS[v], f = est.formas[v];
+  const w = b.w * f.s, h = b.h * f.s;
+  return { x: f.x - VX - w / 2, y: f.y - VY - h / 2, w, h };
+}
+
+// Dibuja la forma v en el contexto c (origen de la vista en (ox, oy), aumento z), girada alrededor de su centro
+function forma(c, v, ox, oy, z) {
+  const f = est.formas[v], r = rect(v);
+  c.save();
+  c.translate((r.x + r.w / 2 - ox) * z, (r.y + r.h / 2 - oy) * z);
+  c.rotate(((f.r || 0) * Math.PI) / 180);
+  c.drawImage(imgs[v], (-r.w / 2) * z, (-r.h / 2) * z, r.w * z, r.h * z);
+  c.restore();
+}
+
+function dibujar() {
+  if (!escena.complete) return;
+  const fant = $("fantasma").value;
+  const r = rect(actual);
+  const centro = { x: est.formas[actual].x - VX, y: est.formas[actual].y - VY };
+  const sw = 540, sh = 300, Z = 3;
+  const sx = centro.x - sw / 2, sy = centro.y - sh / 2;
+
+  cx.drawImage(escena, 0, 0);
+  czx.imageSmoothingQuality = "high";
+  czx.drawImage(escena, sx, sy, sw, sh, 0, 0, sw * Z, sh * Z);
+  if (fant && fant !== actual) {
+    cx.globalAlpha = czx.globalAlpha = 0.38;
+    forma(cx, fant, 0, 0, 1); forma(czx, fant, sx, sy, Z);
+    cx.globalAlpha = czx.globalAlpha = 1;
+  }
+  forma(cx, actual, 0, 0, 1); forma(czx, actual, sx, sy, Z);
+
+  if ($("guias").checked) {
+    cx.strokeStyle = czx.strokeStyle = "rgba(0,255,120,.8)"; cx.setLineDash([6, 6]); czx.setLineDash([8, 8]);
+    cx.beginPath(); cx.moveTo(centro.x - 150, centro.y); cx.lineTo(centro.x + 150, centro.y);
+    cx.moveTo(centro.x, centro.y - 80); cx.lineTo(centro.x, centro.y + 80); cx.stroke();
+    czx.beginPath(); czx.moveTo(0, cz.height / 2); czx.lineTo(cz.width, cz.height / 2);
+    czx.moveTo(cz.width / 2, 0); czx.lineTo(cz.width / 2, cz.height); czx.stroke();
+    cx.setLineDash([]); czx.setLineDash([]);
+  }
+  sincronizar();
+}
+
+function sincronizar() {
+  const f = est.formas[actual];
+  $("px").value = Math.round(f.x); $("py").value = Math.round(f.y);
+  $("sR").value = f.s; $("sN").value = f.s.toFixed(3);
+  $("rR").value = f.r || 0; $("rN").value = (f.r || 0).toFixed(1);
+  $("nombreForma").textContent = actual;
+  document.querySelectorAll("#botonesVisema button").forEach(b => b.classList.toggle("activo", b.dataset.v === actual));
+  const salida = JSON.stringify({ version: 2, formas: Object.fromEntries(VISEMAS.map(v =>
+    [v, { x: Math.round(est.formas[v].x), y: Math.round(est.formas[v].y), s: +est.formas[v].s.toFixed(4), r: +(est.formas[v].r || 0).toFixed(2) }])) }, null, 1);
+  if (document.activeElement !== $("json")) $("json").value = salida;
+  try { localStorage.setItem(CLAVE, JSON.stringify(est)); } catch (e) {}
+}
+
+// aplica un cambio a la forma actual, o a todas si «vinculadas» está marcado
+function mover(dx, dy) {
+  const objetivos = $("vinc").checked ? VISEMAS : [actual];
+  objetivos.forEach(v => { est.formas[v].x += dx; est.formas[v].y += dy; });
+}
+
+VISEMAS.forEach(v => { const b = document.createElement("button"); b.textContent = v; b.dataset.v = v; b.onclick = () => { actual = v; dibujar(); }; $("botonesVisema").appendChild(b); });
+const op0 = document.createElement("option"); op0.value = ""; op0.textContent = "(ninguno)"; $("fantasma").appendChild(op0);
+VISEMAS.forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = v; $("fantasma").appendChild(o); });
+$("fantasma").onchange = dibujar;
+
+const num = (id, fn) => $(id).addEventListener("input", e => { const x = parseFloat(e.target.value); if (!isNaN(x)) { fn(x); dibujar(); } });
+num("px", x => mover(x - est.formas[actual].x, 0));
+num("py", x => mover(0, x - est.formas[actual].y));
+num("sR", x => est.formas[actual].s = x); num("sN", x => est.formas[actual].s = x);
+num("rR", x => est.formas[actual].r = x); num("rN", x => est.formas[actual].r = x);
+$("guias").onchange = dibujar;
+$("reiniciaForma").onclick = () => { est.formas[actual] = porDefecto()[actual]; dibujar(); };
+$("todas").onclick = () => { est = { formas: porDefecto() }; dibujar(); };
+$("copiar").onclick = async () => { try { await navigator.clipboard.writeText($("json").value); } catch (e) { $("json").select(); document.execCommand("copy"); } $("estado").textContent = "Copiado ✓"; $("estado").className = "nota ok"; };
+$("cargar").onclick = () => { try { const o = JSON.parse($("json").value); VISEMAS.forEach(v => { if (o.formas && o.formas[v]) est.formas[v] = o.formas[v]; }); $("json").blur(); dibujar(); $("estado").textContent = "Cargado ✓"; } catch (e) { $("estado").textContent = "JSON no válido"; } };
+$("anima").onclick = () => {
+  if (animando) { clearInterval(animando); animando = null; $("anima").textContent = "▶ Animar secuencia"; return; }
+  const sec = ["X", "B", "C", "D", "C", "E", "F", "G", "H", "A"]; let i = 0;
+  animando = setInterval(() => { actual = sec[i++ % sec.length]; dibujar(); }, 350);
+  $("anima").textContent = "■ Detener";
+};
+
+// arrastrar sobre la vista principal (el canvas está en píxeles 4K de la ventana)
+let arr = null;
+function pos(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height }; }
+cv.addEventListener("mousedown", e => { arr = { p: pos(e), g: JSON.parse(JSON.stringify(est)) }; });
+window.addEventListener("mousemove", e => {
+  if (!arr) return; const p = pos(e);
+  const dx = p.x - arr.p.x, dy = p.y - arr.p.y;
+  const objetivos = $("vinc").checked ? VISEMAS : [actual];
+  objetivos.forEach(v => { est.formas[v].x = arr.g.formas[v].x + dx; est.formas[v].y = arr.g.formas[v].y + dy; });
+  dibujar();
+});
+window.addEventListener("mouseup", () => arr = null);
+window.addEventListener("keydown", e => {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+  const k = e.key.toUpperCase(); if (VISEMAS.includes(k)) { actual = k; dibujar(); return; }
+  if (e.key === "[" || e.key === "]") {
+    const g = (e.shiftKey ? 2 : 0.5) * (e.key === "]" ? 1 : -1);
+    (document.getElementById("vinc").checked ? VISEMAS : [actual]).forEach(v => est.formas[v].r = (est.formas[v].r || 0) + g);
+    e.preventDefault(); dibujar(); return;
+  }
+  const paso = e.shiftKey ? 5 : 1; let m = true;
+  if (e.key === "ArrowLeft") mover(-paso, 0); else if (e.key === "ArrowRight") mover(paso, 0);
+  else if (e.key === "ArrowUp") mover(0, -paso); else if (e.key === "ArrowDown") mover(0, paso); else m = false;
+  if (m) { e.preventDefault(); dibujar(); }
+});
+</script>
+</body>
+</html>

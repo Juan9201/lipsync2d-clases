@@ -1,0 +1,11 @@
+# Herramientas de prueba y medición (versiones fijadas, P4).
+-r requirements.lock
+colorama==0.4.6
+coverage==7.16.2
+iniconfig==2.3.1
+packaging==26.3
+pluggy==1.6.0
+psutil==7.2.2
+Pygments==2.21.0
+pytest-cov==7.1.0
+pytest==9.1.1

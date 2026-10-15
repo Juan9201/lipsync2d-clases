@@ -1,0 +1,30 @@
+.venv/
+.venv-prep/
+.venv*/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Material pesado o generado
+herramientas/*
+!herramientas/manifiesto_descargas.json
+modelos/*
+!modelos/.gitkeep
+salidas/
+cache/
+logs/
+lote/cola.db*
+entrada/*
+!entrada/.gitkeep
+clases/*
+!clases/.gitkeep
+personajes/
+escenarios/
+Temp Real Assest Testing/
+
+# Archivos de claves o entornos locales
+.env
+.env.*
+*.key

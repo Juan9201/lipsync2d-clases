@@ -1,0 +1,9 @@
+{
+ "version": 3,
+ "imagen": "escena_calle.jpg",
+ "tamano_imagen": [1376, 768],
+ "ancla": {"x": 1046, "y": 207},
+ "k": 0.48,
+ "r": -2.5,
+ "ajustes": {}
+}

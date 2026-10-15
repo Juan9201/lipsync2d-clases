@@ -1,0 +1,9 @@
+{
+ "version": 3,
+ "imagen": "personaje_sin_fondo_sin_boca.png",
+ "tamano_imagen": [2000, 1125],
+ "ancla": {"x": 994, "y": 298},
+ "k": 0.73,
+ "r": -4,
+ "ajustes": {}
+}

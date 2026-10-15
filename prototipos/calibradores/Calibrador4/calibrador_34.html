@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calibrador de bocas 3/4</title>
+<style>
+  :root { --bg:#14161a; --panel:#1e2127; --borde:#343942; --texto:#e8eaed; --suave:#9aa3ad; --acento:#4cc2ff; --ok:#6fd08c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--texto); font:14px/1.4 system-ui,Segoe UI,sans-serif; }
+  header { padding:10px 16px; border-bottom:1px solid var(--borde); display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  header span { color:var(--suave); }
+  main { display:grid; grid-template-columns: minmax(0,1fr) 360px; gap:12px; padding:12px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  .vistas { display:grid; gap:12px; }
+  canvas { width:100%; height:auto; background:#000; border:1px solid var(--borde); border-radius:6px; display:block; cursor:crosshair; }
+  .panel { background:var(--panel); border:1px solid var(--borde); border-radius:8px; padding:12px; margin-bottom:12px; }
+  .panel h2 { font-size:13px; margin:0 0 8px; color:var(--suave); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .fila { display:flex; align-items:center; gap:8px; margin:6px 0; flex-wrap:wrap; }
+  .fila label.t { width:100px; color:var(--suave); }
+  .fila input[type=number] { width:92px; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:4px; padding:4px 6px; }
+  .fila input[type=range] { flex:1; min-width:80px; }
+  select { background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:4px; padding:5px 6px; max-width:100%; width:100%; }
+  .botones { display:flex; flex-wrap:wrap; gap:6px; }
+  button { background:#272b33; color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--acento); }
+  button.activo { background:var(--acento); color:#001018; border-color:var(--acento); font-weight:700; }
+  textarea { width:100%; height:190px; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:8px; font:12px/1.4 ui-monospace,Consolas,monospace; resize:vertical; }
+  .nota { color:var(--suave); font-size:12px; }
+  .ok { color:var(--ok); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Calibrador de bocas 3/4</h1>
+  <span>Cada forma por separado. Arrastra sobre la cara (mueve solo la forma elegida) · flechas 1 px (Shift 5) · teclas A–H, X · [ ] giran.</span>
+</header>
+<main>
+  <div class="vistas">
+    <canvas id="principal" width="3840" height="2160"></canvas>
+    <canvas id="zoom" width="1620" height="900"></canvas>
+  </div>
+  <aside>
+    <div class="panel">
+      <h2>Pose 3/4</h2>
+      <select id="pose"></select>
+      <div class="fila" style="margin-top:8px"><label><input type="checkbox" id="espejo"> reflejar las bocas (cabeza que mira al lado contrario)</label></div>
+      <div class="fila"><select id="copiarDe"></select></div>
+      <div class="fila"><button id="btnCopiar">Traer los valores de esa pose</button></div>
+      <div class="nota">«Traer» usa la calibración guardada de otra pose y la mueve según la posición de la cabeza. Luego afinas.</div>
+    </div>
+    <div class="panel">
+      <h2>Forma</h2>
+      <div class="botones" id="botonesVisema"></div>
+      <div class="fila" style="margin-top:10px">
+        <button id="anima">▶ Animar secuencia</button>
+        <label><input type="checkbox" id="guias" checked> guías</label>
+      </div>
+      <div class="fila"><label class="t">Fantasma</label><select id="fantasma" style="width:auto"></select></div>
+      <div class="fila"><label><input type="checkbox" id="vinc"> mover todas a la vez (ajuste grueso)</label></div>
+    </div>
+    <div class="panel">
+      <h2>Posición, tamaño y giro de <span id="nombreForma">A</span></h2>
+      <div class="fila"><label class="t">Centro X</label><input type="number" id="px" step="1"></div>
+      <div class="fila"><label class="t">Centro Y</label><input type="number" id="py" step="1"></div>
+      <div class="fila"><label class="t">Escala</label><input type="range" id="sR" min="0.03" max="0.6" step="0.001"><input type="number" id="sN" step="0.001"></div>
+      <div class="fila"><label class="t">Giro (°)</label><input type="range" id="rR" min="-40" max="40" step="0.1"><input type="number" id="rN" step="0.1"></div>
+      <div class="fila"><label><input type="checkbox" id="mForma"> reflejar solo esta forma (se suma al reflejo de la pose)</label></div>
+      <div class="fila"><button id="reiniciaForma">Reiniciar esta forma</button><button id="todas">Reiniciar todas</button></div>
+      <div class="fila"><label class="t">Cambiar imagen</label><input type="file" id="archivoBoca" accept="image/png"></div>
+      <div class="nota">«Cambiar imagen» sirve para probar una boca nueva (por ejemplo la G regenerada). Para dejarla fija, guarda el PNG en <b>Calibrador4\bocas\boca34_G.png</b>.</div>
+    </div>
+    <div class="panel">
+      <h2>Valores (cópialos y pégalos en el chat)</h2>
+      <textarea id="json" spellcheck="false"></textarea>
+      <div class="fila"><button id="copiar">Copiar</button><button id="cargar">Cargar lo pegado</button><button id="copiarTodas">Copiar TODAS las poses</button><span id="estado" class="nota"></span></div>
+    </div>
+  </aside>
+</main>
+<script src="datos34.js"></script>
+<script src="precarga34.js" onerror="void 0"></script>
+<script>
+const VISEMAS = "ABCDEFGHX".split("");
+const $ = id => document.getElementById(id);
+const cv = $("principal"), cx = cv.getContext("2d"), cz = $("zoom"), czx = cz.getContext("2d");
+const imgs = {}; let pendientes = VISEMAS.length;
+const memoria = {};      // copia en memoria de cada pose y lado
+const lado = {};         // lado (reflejado o no) activo de cada pose      // copia en memoria de cada pose y lado: no depende del almacenamiento del navegador
+let pose = POSES[0], est = null, actual = "A", animando = null, escena = new Image();
+
+POSES.forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = p.nombre; $("pose").appendChild(o); const o2 = o.cloneNode(true); $("copiarDe").appendChild(o2); });
+VISEMAS.forEach(v => { const b = document.createElement("button"); b.textContent = v; b.dataset.v = v; b.onclick = () => { actual = v; dibujar(); }; $("botonesVisema").appendChild(b); });
+const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "(ninguno)"; $("fantasma").appendChild(o0);
+VISEMAS.forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = v; $("fantasma").appendChild(o); });
+
+function precargar() {
+  if (typeof PRECARGA === "undefined") return;
+  Object.keys(PRECARGA.poses).forEach(n => { const p = PRECARGA.poses[n]; memoria["cal34_" + n + "_" + (p.espejo ? "esp" : "dir")] = { formas: JSON.parse(JSON.stringify(p.formas)) }; lado[n] = !!p.espejo; });
+}
+VISEMAS.forEach(v => { const i = new Image(); i.onload = () => { if (--pendientes === 0) { precargar(); cargaPose(0); } }; i.src = `bocas/boca34_${v}.png`; imgs[v] = i; });
+
+const clave = () => "cal34_" + pose.nombre + "_" + ($("espejo").checked ? "esp" : "dir");
+function porDefecto() {
+  const a = imgs.A, s = ESC0, top = ANCLA0[1] + pose.dcab[1] - a.naturalHeight * s / 2, o = {};
+  VISEMAS.forEach(v => { const im = imgs[v]; o[v] = { x: ANCLA0[0] + pose.dcab[0], y: top + im.naturalHeight * s / 2, s: s, r: 0, m: false }; });
+  return o;
+}
+function cargaPose(i) {
+  pose = POSES[i]; $("pose").value = i;
+  if (lado[pose.nombre] !== undefined) $("espejo").checked = lado[pose.nombre];       // el reflejo propio de cada pose
+  escena = new Image(); escena.onload = () => { cargaEstado(); dibujar(); }; escena.src = pose.archivo;
+}
+function cargaEstado() {
+  est = { formas: porDefecto() };
+  if (memoria[clave()]) { est = JSON.parse(JSON.stringify(memoria[clave()])); return; }
+  try { const g = localStorage.getItem(clave()); if (g) est = JSON.parse(g); } catch (e) {}
+}
+$("pose").onchange = e => cargaPose(parseInt(e.target.value));
+$("espejo").onchange = () => { cargaEstado(); dibujar(); };
+
+function geom(v) { const f = est.formas[v], im = imgs[v]; return { cx: f.x, cy: f.y, w: im.naturalWidth * f.s, h: im.naturalHeight * f.s, rot: f.r || 0 }; }
+function pinta(c, v, ox, oy, z) {
+  const g = geom(v); c.save(); c.translate((g.cx - ox) * z, (g.cy - oy) * z); c.rotate(g.rot * Math.PI / 180);
+  if ($("espejo").checked !== !!est.formas[v].m) c.scale(-1, 1);       // reflejo de la pose combinado con el de la forma
+  c.drawImage(imgs[v], -g.w / 2 * z, -g.h / 2 * z, g.w * z, g.h * z); c.restore();
+}
+function dibujar() {
+  if (!escena.complete || !escena.naturalWidth || !est) return;
+  const f = est.formas[actual], Z = 1620 / 640, ox = f.x - 320, oy = f.y - 150;
+  cx.drawImage(escena, 0, 0);
+  czx.imageSmoothingQuality = "high"; czx.drawImage(escena, ox, oy, 640, 360, 0, 0, 1620, 900);
+  const fant = $("fantasma").value;
+  if (fant && fant !== actual) { cx.globalAlpha = czx.globalAlpha = 0.38; pinta(cx, fant, 0, 0, 1); pinta(czx, fant, ox, oy, Z); cx.globalAlpha = czx.globalAlpha = 1; }
+  pinta(cx, actual, 0, 0, 1); pinta(czx, actual, ox, oy, Z);
+  if ($("guias").checked) {
+    cx.strokeStyle = czx.strokeStyle = "rgba(0,255,120,.85)"; cx.lineWidth = 3; cx.setLineDash([12, 12]); czx.setLineDash([8, 8]);
+    cx.beginPath(); cx.moveTo(f.x - 140, f.y); cx.lineTo(f.x + 140, f.y); cx.moveTo(f.x, f.y - 80); cx.lineTo(f.x, f.y + 80); cx.stroke();
+    czx.beginPath(); czx.moveTo(0, 450 - 0); czx.lineTo(1620, 450); czx.moveTo(810, 0); czx.lineTo(810, 900); czx.stroke();
+    cx.setLineDash([]); czx.setLineDash([]);
+  }
+  sincronizar();
+}
+function sincronizar() {
+  const f = est.formas[actual];
+  $("px").value = Math.round(f.x); $("py").value = Math.round(f.y); $("sR").value = f.s; $("sN").value = f.s.toFixed(3);
+  $("mForma").checked = !!f.m; $("rR").value = f.r || 0; $("rN").value = (f.r || 0).toFixed(1); $("nombreForma").textContent = actual;
+  document.querySelectorAll("#botonesVisema button").forEach(b => b.classList.toggle("activo", b.dataset.v === actual));
+  const salida = JSON.stringify({ version: 4, juego: "tres_cuartos", pose: pose.nombre, espejo: $("espejo").checked,
+    formas: Object.fromEntries(VISEMAS.map(v => [v, { x: Math.round(est.formas[v].x), y: Math.round(est.formas[v].y), s: +est.formas[v].s.toFixed(4), r: +(est.formas[v].r || 0).toFixed(2), m: !!est.formas[v].m }])) }, null, 1);
+  if (document.activeElement !== $("json")) $("json").value = salida;
+  memoria[clave()] = JSON.parse(JSON.stringify(est)); lado[pose.nombre] = $("espejo").checked;
+  try { localStorage.setItem(clave(), JSON.stringify(est)); } catch (e) {}
+}
+const objetivos = () => $("vinc").checked ? VISEMAS : [actual];
+const num = (id, fn) => $(id).addEventListener("input", e => { const x = parseFloat(e.target.value); if (!isNaN(x)) { fn(x); dibujar(); } });
+num("px", x => { const d = x - est.formas[actual].x; objetivos().forEach(v => est.formas[v].x += d); });
+num("py", x => { const d = x - est.formas[actual].y; objetivos().forEach(v => est.formas[v].y += d); });
+num("sR", x => est.formas[actual].s = x); num("sN", x => est.formas[actual].s = x);
+num("rR", x => est.formas[actual].r = x); num("rN", x => est.formas[actual].r = x);
+$("guias").onchange = dibujar; $("fantasma").onchange = dibujar;
+$("mForma").onchange = () => { est.formas[actual].m = $("mForma").checked; dibujar(); };
+$("reiniciaForma").onclick = () => { est.formas[actual] = porDefecto()[actual]; dibujar(); };
+$("todas").onclick = () => { est = { formas: porDefecto() }; dibujar(); };
+$("btnCopiar").onclick = () => {
+  const o = POSES[parseInt($("copiarDe").value)];
+  try {
+    for (const suf of [($("espejo").checked ? "esp" : "dir")]) { const k = "cal34_" + o.nombre + "_" + suf; const g = memoria[k] ? JSON.stringify(memoria[k]) : localStorage.getItem(k); if (!g) { $("estado").textContent = "Esa pose aún no tiene valores guardados"; return; }
+      const origen = JSON.parse(g); const dx = pose.dcab[0] - o.dcab[0], dy = pose.dcab[1] - o.dcab[1];
+      VISEMAS.forEach(v => { est.formas[v] = { x: origen.formas[v].x + dx, y: origen.formas[v].y + dy, s: origen.formas[v].s, r: origen.formas[v].r || 0, m: !!origen.formas[v].m }; }); }
+    dibujar(); $("estado").textContent = "Valores traídos ✓"; $("estado").className = "nota ok";
+  } catch (e) { $("estado").textContent = "No se pudo leer lo guardado"; }
+};
+$("copiar").onclick = async () => { try { await navigator.clipboard.writeText($("json").value); } catch (e) { $("json").select(); document.execCommand("copy"); } $("estado").textContent = "Copiado ✓"; $("estado").className = "nota ok"; };
+$("copiarTodas").onclick = async () => {
+  const poses = {};
+  POSES.forEach(p => { const e = lado[p.nombre]; if (e === undefined) return; const m = memoria["cal34_" + p.nombre + "_" + (e ? "esp" : "dir")]; if (m) poses[p.nombre] = { espejo: e, formas: m.formas }; });
+  const txt = JSON.stringify({ version: 4, juego: "tres_cuartos", poses }, null, 1);
+  $("json").value = txt;
+  try { await navigator.clipboard.writeText(txt); } catch (e) { $("json").select(); document.execCommand("copy"); }
+  $("estado").textContent = "Copiadas " + Object.keys(poses).length + " poses ✓"; $("estado").className = "nota ok";
+};
+$("cargar").onclick = () => { try { const o = JSON.parse($("json").value);
+  if (o.poses) { Object.keys(o.poses).forEach(n => { const p = o.poses[n]; memoria["cal34_" + n + "_" + (p.espejo ? "esp" : "dir")] = { formas: p.formas }; lado[n] = !!p.espejo; }); if (lado[pose.nombre] !== undefined) $("espejo").checked = lado[pose.nombre]; cargaEstado(); $("json").blur(); dibujar(); $("estado").textContent = "Cargadas " + Object.keys(o.poses).length + " poses ✓"; return; }
+  if (o.todas) { Object.keys(o.todas).forEach(k => memoria[k] = o.todas[k]); cargaEstado(); $("json").blur(); dibujar(); $("estado").textContent = "Cargadas " + Object.keys(o.todas).length + " calibraciones ✓"; return; } VISEMAS.forEach(v => { if (o.formas && o.formas[v]) est.formas[v] = Object.assign({ r: 0, m: false }, o.formas[v]); }); $("json").blur(); dibujar(); $("estado").textContent = "Cargado ✓"; } catch (e) { $("estado").textContent = "JSON no válido"; } };
+$("archivoBoca").onchange = e => { const f = e.target.files[0]; if (!f) return; const i = new Image(); i.onload = () => { imgs[actual] = i; dibujar(); }; i.src = URL.createObjectURL(f); };
+$("anima").onclick = () => {
+  if (animando) { clearInterval(animando); animando = null; $("anima").textContent = "▶ Animar secuencia"; return; }
+  const sec = ["X", "B", "C", "D", "C", "E", "F", "G", "H", "A"]; let i = 0;
+  animando = setInterval(() => { actual = sec[i++ % sec.length]; dibujar(); }, 350); $("anima").textContent = "■ Detener";
+};
+let arr = null;
+function pos(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height }; }
+cv.addEventListener("mousedown", e => { arr = { p: pos(e), g: JSON.parse(JSON.stringify(est)) }; });
+window.addEventListener("mousemove", e => { if (!arr) return; const p = pos(e), dx = p.x - arr.p.x, dy = p.y - arr.p.y; objetivos().forEach(v => { est.formas[v].x = arr.g.formas[v].x + dx; est.formas[v].y = arr.g.formas[v].y + dy; }); dibujar(); });
+window.addEventListener("mouseup", () => arr = null);
+window.addEventListener("keydown", e => {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+  const k = e.key.toUpperCase(); if (VISEMAS.includes(k)) { actual = k; dibujar(); return; }
+  const paso = e.shiftKey ? 5 : 1; let m = true;
+  if (e.key === "ArrowLeft") objetivos().forEach(v => est.formas[v].x -= paso); else if (e.key === "ArrowRight") objetivos().forEach(v => est.formas[v].x += paso);
+  else if (e.key === "ArrowUp") objetivos().forEach(v => est.formas[v].y -= paso); else if (e.key === "ArrowDown") objetivos().forEach(v => est.formas[v].y += paso);
+  else if (e.key === "[") objetivos().forEach(v => est.formas[v].r = (est.formas[v].r || 0) - (e.shiftKey ? 2 : 0.5));
+  else if (e.key === "]") objetivos().forEach(v => est.formas[v].r = (est.formas[v].r || 0) + (e.shiftKey ? 2 : 0.5)); else m = false;
+  if (m) { e.preventDefault(); dibujar(); }
+});
+</script>
+</body>
+</html>

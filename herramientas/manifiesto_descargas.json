@@ -1,0 +1,34 @@
+[
+  {
+    "archivo": "ffmpeg-9.0.1-essentials_build.zip",
+    "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.1/ffmpeg-9.0.1-essentials_build.zip",
+    "sha256": "fec81ae03971d9dd4be3ebe02e263bd2ec1d789483f931bdba5f5715e65da2e9",
+    "extraer_en": "herramientas/ffmpeg",
+    "quitar_raiz": true,
+    "nota": "Checksum publicado por GyanD/codexffmpeg (coincide)."
+  },
+  {
+    "archivo": "Rhubarb-Lip-Sync-1.14.0-Windows.zip",
+    "url": "https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-Windows.zip",
+    "sha256": "62fa416a8d5e382a3828ee4bef358ce520d0b4cabdeaea75a7ac266d098d1fe3",
+    "extraer_en": "herramientas/rhubarb",
+    "quitar_raiz": true,
+    "nota": "El proyecto no publica checksum; este es el calculado tras descargar de la release oficial el 2026-10-14."
+  },
+  {
+    "archivo": "BiRefNet-general-epoch_244.onnx",
+    "grupo": "preparacion",
+    "url": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/BiRefNet-general-epoch_244.onnx",
+    "sha256": "58f621f00f5d756097615970a88a791584600dcf7c45b18a0a6267535a1ebd3c",
+    "copiar_a": "modelos/prep/rembg/models/birefnet-general/birefnet-general.onnx",
+    "nota": "Modelo de segmentación por defecto (spike S2). MD5 publicado por rembg coincide."
+  },
+  {
+    "archivo": "big-lama.pt",
+    "grupo": "preparacion",
+    "url": "https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt",
+    "sha256": "7ba7aa7ac37a4d41fdbbeba3a2af7ead18058552997e3a3cd1a3b2210c9e6b4c",
+    "copiar_a": "modelos/prep/torch/hub/checkpoints/big-lama.pt",
+    "nota": "Modelo de inpainting LaMa (TorchScript); sha256 calculado tras descargar el 2026-10-14."
+  }
+]

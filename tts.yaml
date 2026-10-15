@@ -1,0 +1,23 @@
+# Configuración de voz. Edita aquí el género, la voz, el idioma y el estilo.
+#
+# GÉNERO: elige la voz de cada proveedor con una sola línea (para cambiar de profesor o
+# profesora). Valores: hombre | mujer.  También se puede forzar con --genero en la CLI.
+# Una «voz:» o «modelo:» explícita en un proveedor manda sobre el género.
+genero: hombre
+
+gemini-studio:
+  url: http://127.0.0.1:5055      # tu webapp gemini-tts-studio (debe estar encendida)
+  idioma: es-419                  # español latinoamericano; usa es-ES para el de España
+  voces:                          # ids del catálogo de la webapp (/api/voices?language=es-419)
+    hombre: es-419-podcaster-3    # locutor mexicano de 37 años, tono grave (elegida por el usuario)
+    mujer: es-419-podcaster-2     # locutora mexicana de 25 años (sin probar)
+  estilo: ""
+  velocidad: normal               # muy lenta | lenta | normal | rápida | muy rápida
+  tono: normal                    # muy grave | grave | normal | agudo | muy agudo
+  temperatura: 1.0
+  # modelo_gemini: gemini-3.8-flash-tts
+
+edge:
+  voces:                          # voces multilingües: leen bien español e inglés mezclados
+    hombre: en-US-AndrewMultilingualNeural
+    mujer: en-US-AvaMultilingualNeural

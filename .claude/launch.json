@@ -1,0 +1,75 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "calibrador-boca",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "Temp Real Assest Testing/Calibrador"
+      ],
+      "port": 8765
+    },
+    {
+      "name": "calibrador-boca-2",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8766",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "Temp Real Assest Testing/Calibrador2"
+      ],
+      "port": 8766
+    },
+    {
+      "name": "calibrador-escena",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8767",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "Temp Real Assest Testing/Calibrador3"
+      ],
+      "port": 8767
+    },
+    {
+      "name": "generador-prompts",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8768",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "Temp Real Assest Testing/Generador"
+      ],
+      "port": 8768
+    },
+    {
+      "name": "calibrador-34",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8769",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "Temp Real Assest Testing/Calibrador4"
+      ],
+      "port": 8769
+    }
+  ]
+}

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calibrador de escena</title>
+<style>
+  :root { --bg:#14161a; --panel:#1e2127; --borde:#343942; --texto:#e8eaed; --suave:#9aa3ad; --acento:#4cc2ff; --ok:#6fd08c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--texto); font:14px/1.4 system-ui,Segoe UI,sans-serif; }
+  header { padding:10px 16px; border-bottom:1px solid var(--borde); display:flex; gap:16px; align-items:baseline; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  header span { color:var(--suave); }
+  main { display:grid; grid-template-columns: minmax(0,1fr) 350px; gap:12px; padding:12px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  .vistas { display:grid; gap:12px; }
+  canvas { width:100%; height:auto; background:#000; border:1px solid var(--borde); border-radius:6px; display:block; cursor:crosshair; }
+  .panel { background:var(--panel); border:1px solid var(--borde); border-radius:8px; padding:12px; margin-bottom:12px; }
+  .panel h2 { font-size:13px; margin:0 0 8px; color:var(--suave); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .fila { display:flex; align-items:center; gap:8px; margin:6px 0; flex-wrap:wrap; }
+  .fila label.t { width:100px; color:var(--suave); }
+  .fila input[type=number] { width:92px; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:4px; padding:4px 6px; }
+  .fila input[type=range] { flex:1; min-width:80px; }
+  .fila select { background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:4px; padding:4px 6px; max-width:100%; }
+  .botones { display:flex; flex-wrap:wrap; gap:6px; }
+  button { background:#272b33; color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--acento); }
+  button.activo { background:var(--acento); color:#001018; border-color:var(--acento); font-weight:700; }
+  textarea { width:100%; height:170px; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:8px; font:12px/1.4 ui-monospace,Consolas,monospace; resize:vertical; }
+  .nota { color:var(--suave); font-size:12px; }
+  .ok { color:var(--ok); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Calibrador de escena</h1>
+  <span>Coloca el juego de bocas ya calibrado sobre cualquier imagen: arrastra para mover, rueda del mouse o +/− para el tamaño, [ y ] para girar, flechas para afinar (Shift = 5 px).</span>
+</header>
+<main>
+  <div class="vistas">
+    <canvas id="principal"></canvas>
+    <canvas id="zoom" width="1620" height="900"></canvas>
+  </div>
+  <aside>
+    <div class="panel">
+      <h2>Imagen</h2>
+      <div class="fila"><select id="escena"></select></div>
+      <div class="fila"><label class="t">Otra imagen</label><input type="file" id="archivo" accept="image/*"></div>
+      <div class="nota" id="infoImg"></div>
+    </div>
+    <div class="panel">
+      <h2>Forma</h2>
+      <div class="botones" id="botonesVisema"></div>
+      <div class="fila" style="margin-top:10px">
+        <button id="anima">▶ Animar secuencia</button>
+        <label><input type="checkbox" id="guias" checked> guías</label>
+        <label><input type="checkbox" id="todas"> ver todas encimadas</label>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Colocación de todo el juego</h2>
+      <div class="fila"><label class="t">Ancla X (px)</label><input type="number" id="ax" step="1"></div>
+      <div class="fila"><label class="t">Ancla Y (px)</label><input type="number" id="ay" step="1"></div>
+      <div class="fila"><label class="t">Tamaño ×</label><input type="range" id="kR" min="0.05" max="2.5" step="0.005"><input type="number" id="kN" step="0.005"></div>
+      <div class="fila"><label class="t">Giro (°)</label><input type="range" id="rR" min="-25" max="25" step="0.1"><input type="number" id="rN" step="0.1"></div>
+      <div class="nota">El ancla es el centro de la boca cerrada (A). El tamaño × es respecto al juego calibrado en la escena de referencia (1,00 = aula 4K).</div>
+    </div>
+    <div class="panel">
+      <h2>Ajuste fino solo de <span id="nombreForma">A</span> (opcional)</h2>
+      <div class="fila"><label class="t">Mover X</label><input type="number" id="dx" step="1"></div>
+      <div class="fila"><label class="t">Mover Y</label><input type="number" id="dy" step="1"></div>
+      <div class="fila"><label class="t">Tamaño ×</label><input type="number" id="dk" step="0.01"></div>
+      <div class="fila"><label class="t">Giro (°)</label><input type="number" id="dr" step="0.1"></div>
+      <div class="fila"><button id="reiniciaForma">Reiniciar esta forma</button></div>
+    </div>
+    <div class="panel">
+      <h2>Valores (cópialos y pégalos en el chat)</h2>
+      <textarea id="json" spellcheck="false"></textarea>
+      <div class="fila">
+        <button id="copiar">Copiar</button>
+        <button id="cargar">Cargar lo pegado</button>
+        <span id="estado" class="nota"></span>
+      </div>
+    </div>
+  </aside>
+</main>
+<script src="datos.js"></script>
+<script>
+const VISEMAS = "ABCDEFGHX".split("");
+const A0 = [REF.A.x, REF.A.y];                      // ancla de la escena de referencia
+const nuevoEstado = () => ({ ax: 0, ay: 0, k: 1, r: 0, aj: Object.fromEntries(VISEMAS.map(v => [v, { dx: 0, dy: 0, k: 1, r: 0 }])) });
+let est = nuevoEstado(), actual = "A", animando = null, nombreImg = "", img = new Image();
+const $ = id => document.getElementById(id);
+const cv = $("principal"), cx = cv.getContext("2d"), cz = $("zoom"), czx = cz.getContext("2d");
+const imgs = {}; let pendientes = VISEMAS.length;
+VISEMAS.forEach(v => { const i = new Image(); i.onload = () => { if (--pendientes === 0) cargaEscena(0); }; i.src = `boca_${v}.png`; imgs[v] = i; });
+
+ESCENAS.forEach((e, i) => { const o = document.createElement("option"); o.value = i; o.textContent = e.nombre; $("escena").appendChild(o); });
+const oOtra = document.createElement("option"); oOtra.value = "otra"; oOtra.textContent = "(imagen cargada desde tu equipo)"; oOtra.hidden = true; $("escena").appendChild(oOtra);
+$("escena").onchange = e => cargaEscena(parseInt(e.target.value));
+$("archivo").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const url = URL.createObjectURL(f); nombreImg = f.name;
+  img = new Image(); img.onload = () => { iniciar(null, f.name); }; img.src = url; oOtra.hidden = false; $("escena").value = "otra";
+};
+
+function cargaEscena(i) {
+  const e = ESCENAS[i]; nombreImg = e.archivo;
+  img = new Image(); img.onload = () => iniciar(e, e.archivo); img.src = e.archivo;
+}
+function iniciar(e, nombre) {
+  cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+  est = nuevoEstado();
+  est.ax = e ? e.ancla[0] : img.naturalWidth * 0.5; est.ay = e ? e.ancla[1] : img.naturalHeight * 0.4; est.k = e ? e.k : img.naturalWidth / 3840; est.r = e ? (e.r || 0) : 0;
+  try { const g = localStorage.getItem("calibrador_escena_" + nombre); if (g) est = Object.assign(est, JSON.parse(g)); } catch (x) {}
+  $("infoImg").textContent = `${nombre} · ${img.naturalWidth}×${img.naturalHeight} px`;
+  dibujar();
+}
+
+// Geometría de la forma v en píxeles de la imagen
+function geom(v) {
+  const b = BOCAS[v], f = REF[v], a = est.aj[v];
+  const rg = est.r * Math.PI / 180, cr = Math.cos(rg), sr = Math.sin(rg);
+  const rx = (f.x - A0[0]) * est.k, ry = (f.y - A0[1]) * est.k;
+  const cxm = est.ax + rx * cr - ry * sr + a.dx, cym = est.ay + rx * sr + ry * cr + a.dy;
+  const s = f.s * est.k * a.k;
+  return { cx: cxm, cy: cym, w: b.w * s, h: b.h * s, rot: (f.r || 0) + est.r + a.r };
+}
+function pinta(c, v, ox, oy, z) {
+  const g = geom(v);
+  c.save(); c.translate((g.cx - ox) * z, (g.cy - oy) * z); c.rotate(g.rot * Math.PI / 180);
+  c.drawImage(imgs[v], -g.w / 2 * z, -g.h / 2 * z, g.w * z, g.h * z); c.restore();
+}
+
+function dibujar() {
+  if (!img.complete || !img.naturalWidth) return;
+  cx.drawImage(img, 0, 0);
+  const anchoRegion = Math.max(120, 560 * est.k), altoRegion = anchoRegion * 900 / 1620;
+  const Z = 1620 / anchoRegion, ox = est.ax - anchoRegion / 2, oy = est.ay - altoRegion * 0.35;
+  czx.imageSmoothingQuality = "high";
+  czx.clearRect(0, 0, cz.width, cz.height);
+  czx.drawImage(img, ox, oy, anchoRegion, altoRegion, 0, 0, 1620, 900);
+  const lista = $("todas").checked ? VISEMAS.filter(v => v !== actual).concat([actual]) : [actual];
+  lista.forEach(v => { const tenue = $("todas").checked && v !== actual; cx.globalAlpha = czx.globalAlpha = tenue ? 0.35 : 1; pinta(cx, v, 0, 0, 1); pinta(czx, v, ox, oy, Z); });
+  cx.globalAlpha = czx.globalAlpha = 1;
+  if ($("guias").checked) {
+    cx.strokeStyle = czx.strokeStyle = "rgba(0,255,120,.85)"; cx.lineWidth = Math.max(1, cv.width / 1400); cx.setLineDash([6, 6]); czx.setLineDash([8, 8]);
+    const L = 220 * est.k;
+    cx.beginPath(); cx.moveTo(est.ax - L, est.ay); cx.lineTo(est.ax + L, est.ay); cx.moveTo(est.ax, est.ay - L / 2); cx.lineTo(est.ax, est.ay + L); cx.stroke();
+    czx.beginPath(); czx.moveTo(0, (est.ay - oy) * Z); czx.lineTo(1620, (est.ay - oy) * Z); czx.moveTo((est.ax - ox) * Z, 0); czx.lineTo((est.ax - ox) * Z, 900); czx.stroke();
+    cx.setLineDash([]); czx.setLineDash([]);
+  }
+  sincronizar();
+}
+
+function sincronizar() {
+  const a = est.aj[actual];
+  $("ax").value = Math.round(est.ax); $("ay").value = Math.round(est.ay);
+  $("kR").value = est.k; $("kN").value = est.k.toFixed(3);
+  $("rR").value = est.r; $("rN").value = est.r.toFixed(1);
+  $("dx").value = a.dx.toFixed(0); $("dy").value = a.dy.toFixed(0); $("dk").value = a.k.toFixed(2); $("dr").value = a.r.toFixed(1);
+  $("nombreForma").textContent = actual;
+  document.querySelectorAll("#botonesVisema button").forEach(b => b.classList.toggle("activo", b.dataset.v === actual));
+  const ajustes = {}; VISEMAS.forEach(v => { const q = est.aj[v]; if (q.dx || q.dy || q.k !== 1 || q.r) ajustes[v] = { dx: Math.round(q.dx), dy: Math.round(q.dy), k: +q.k.toFixed(3), r: +q.r.toFixed(2) }; });
+  const salida = JSON.stringify({ version: 3, imagen: nombreImg, tamano_imagen: [img.naturalWidth, img.naturalHeight],
+    ancla: { x: Math.round(est.ax), y: Math.round(est.ay) }, k: +est.k.toFixed(4), r: +est.r.toFixed(2), ajustes }, null, 1);
+  if (document.activeElement !== $("json")) $("json").value = salida;
+  try { localStorage.setItem("calibrador_escena_" + nombreImg, JSON.stringify(est)); } catch (e) {}
+}
+
+VISEMAS.forEach(v => { const b = document.createElement("button"); b.textContent = v; b.dataset.v = v; b.onclick = () => { actual = v; dibujar(); }; $("botonesVisema").appendChild(b); });
+const num = (id, fn) => $(id).addEventListener("input", e => { const x = parseFloat(e.target.value); if (!isNaN(x)) { fn(x); dibujar(); } });
+num("ax", x => est.ax = x); num("ay", x => est.ay = x);
+num("kR", x => est.k = x); num("kN", x => est.k = x); num("rR", x => est.r = x); num("rN", x => est.r = x);
+num("dx", x => est.aj[actual].dx = x); num("dy", x => est.aj[actual].dy = x); num("dk", x => est.aj[actual].k = x); num("dr", x => est.aj[actual].r = x);
+$("guias").onchange = dibujar; $("todas").onchange = dibujar;
+$("reiniciaForma").onclick = () => { est.aj[actual] = { dx: 0, dy: 0, k: 1, r: 0 }; dibujar(); };
+$("copiar").onclick = async () => { try { await navigator.clipboard.writeText($("json").value); } catch (e) { $("json").select(); document.execCommand("copy"); } $("estado").textContent = "Copiado ✓"; $("estado").className = "nota ok"; };
+$("cargar").onclick = () => { try { const o = JSON.parse($("json").value); est.ax = o.ancla.x; est.ay = o.ancla.y; est.k = o.k; est.r = o.r || 0; est.aj = nuevoEstado().aj; Object.entries(o.ajustes || {}).forEach(([v, q]) => est.aj[v] = Object.assign({ dx: 0, dy: 0, k: 1, r: 0 }, q)); $("json").blur(); dibujar(); $("estado").textContent = "Cargado ✓"; } catch (e) { $("estado").textContent = "JSON no válido"; } };
+$("anima").onclick = () => {
+  if (animando) { clearInterval(animando); animando = null; $("anima").textContent = "▶ Animar secuencia"; return; }
+  const sec = ["X", "B", "C", "D", "C", "E", "F", "G", "H", "A"]; let i = 0;
+  animando = setInterval(() => { actual = sec[i++ % sec.length]; dibujar(); }, 350);
+  $("anima").textContent = "■ Detener";
+};
+
+// interacción: arrastrar mueve el ancla; rueda cambia el tamaño
+let arr = null;
+function pos(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height }; }
+cv.addEventListener("mousedown", e => { arr = { p: pos(e), ax: est.ax, ay: est.ay }; });
+window.addEventListener("mousemove", e => { if (!arr) return; const p = pos(e); est.ax = arr.ax + p.x - arr.p.x; est.ay = arr.ay + p.y - arr.p.y; dibujar(); });
+window.addEventListener("mouseup", () => arr = null);
+cv.addEventListener("wheel", e => { e.preventDefault(); est.k *= e.deltaY < 0 ? 1.01 : 0.99; dibujar(); }, { passive: false });
+window.addEventListener("keydown", e => {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+  const k = e.key.toUpperCase(); if (VISEMAS.includes(k)) { actual = k; dibujar(); return; }
+  const paso = e.shiftKey ? 5 : 1; let m = true;
+  if (e.key === "ArrowLeft") est.ax -= paso; else if (e.key === "ArrowRight") est.ax += paso;
+  else if (e.key === "ArrowUp") est.ay -= paso; else if (e.key === "ArrowDown") est.ay += paso;
+  else if (e.key === "+" || e.key === "=") est.k *= 1.01; else if (e.key === "-") est.k *= 0.99;
+  else if (e.key === "[") est.r -= e.shiftKey ? 2 : 0.5; else if (e.key === "]") est.r += e.shiftKey ? 2 : 0.5; else m = false;
+  if (m) { e.preventDefault(); dibujar(); }
+});
+</script>
+</body>
+</html>
