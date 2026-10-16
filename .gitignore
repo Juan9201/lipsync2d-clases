@@ -31,3 +31,8 @@ Temp Real Assest Testing/
 
 # Respaldo para Drive (zips pesados)
 respaldo_drive/
+
+# Editor de poses (imágenes generadas por construir_editor.py)
+prototipos/editor/img/
+prototipos/editor/mini/
+prototipos/editor/blink/

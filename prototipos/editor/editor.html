@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de poses</title>
+<style>
+  :root { --bg:#14161a; --panel:#1e2127; --borde:#343942; --texto:#e8eaed; --suave:#9aa3ad; --acento:#4cc2ff; --ok:#6fd08c; --her:#f2c14e; --pend:#e0707a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--texto); font:14px/1.4 system-ui,Segoe UI,sans-serif; }
+  header { padding:10px 16px; border-bottom:1px solid var(--borde); display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  header span { color:var(--suave); font-size:13px; }
+  main { display:grid; grid-template-columns: minmax(0,1fr) 380px; gap:12px; padding:12px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  .vistas { display:grid; gap:12px; align-content:start; }
+  canvas { width:100%; height:auto; background:#000; border:1px solid var(--borde); border-radius:6px; display:block; cursor:crosshair; }
+  .panel { background:var(--panel); border:1px solid var(--borde); border-radius:8px; padding:12px; margin-bottom:12px; }
+  .panel h2 { font-size:13px; margin:0 0 8px; color:var(--suave); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .fila { display:flex; align-items:center; gap:8px; margin:6px 0; flex-wrap:wrap; }
+  .fila label.t { width:100px; color:var(--suave); }
+  .fila input[type=number] { width:84px; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:4px; padding:4px 6px; }
+  .fila input[type=range] { flex:1; min-width:80px; }
+  select { background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:4px; padding:5px 6px; max-width:100%; width:100%; }
+  .botones { display:flex; flex-wrap:wrap; gap:6px; }
+  button { background:#272b33; color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--acento); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.activo { background:var(--acento); color:#001018; border-color:var(--acento); font-weight:700; }
+  textarea { width:100%; height:130px; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:8px; font:12px/1.4 ui-monospace,Consolas,monospace; resize:vertical; }
+  .nota { color:var(--suave); font-size:12px; }
+  .ok { color:var(--ok); }
+  .estadoPose { font-weight:700; }
+  .estadoPose.ok { color:var(--ok); } .estadoPose.her { color:var(--her); } .estadoPose.pend { color:var(--pend); }
+  #rejilla { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:6px; }
+  .celda { position:relative; border:2px solid var(--borde); border-radius:6px; overflow:hidden; cursor:pointer; background:#000; }
+  .celda canvas { border:0; border-radius:0; cursor:pointer; }
+  .celda.sel { outline:2px solid var(--acento); }
+  .celda.ok { border-color:var(--ok); } .celda.her { border-color:var(--her); } .celda.pend { border-color:var(--pend); }
+  .celda span { position:absolute; left:0; right:0; bottom:0; font-size:10px; background:#000b; padding:1px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pestanas { display:flex; gap:6px; margin-bottom:8px; }
+  h3 { font-size:12px; color:var(--suave); margin:10px 0 2px; font-weight:600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Editor de poses · bocas y parpadeo</h1>
+  <span>Arrastra sobre la cara para mover · flechas 1 px (Shift 5) · A–H, X eligen la forma · [ ] giran · 1 2 3 ojos abiertos/medio/cerrado · M alterna boca/ojos · Re Pág / Av Pág cambian de pose</span>
+</header>
+<main>
+  <div class="vistas">
+    <canvas id="principal" width="3840" height="2160"></canvas>
+    <canvas id="zoom" width="1620" height="900"></canvas>
+    <div class="panel">
+      <h2>Todas las poses de la vista, con la forma elegida <span class="nota" id="resumen"></span></h2>
+      <div id="rejilla"></div>
+    </div>
+  </div>
+  <aside>
+    <div class="panel">
+      <h2>Vista y pose</h2>
+      <div class="pestanas" id="pestanasVista"></div>
+      <select id="pose"></select>
+      <div class="fila" style="margin-top:6px"><span>Estado: <span id="estadoPose" class="estadoPose"></span></span>
+        <button id="btnRevisada">Marcar revisada ✓</button></div>
+      <div class="fila"><label><input type="checkbox" id="espejo"> reflejar las bocas (cabeza que mira al lado contrario)</label></div>
+      <div class="fila"><button id="btnPrev">◀ Anterior</button><button id="btnSig">Siguiente ▶</button><button id="btnSigPend">Siguiente pendiente</button></div>
+      <h3>Aplicar esta calibración a las demás</h3>
+      <div class="fila"><button id="btnAplicar">Copiar a las poses pendientes</button></div>
+      <div class="fila"><label><input type="checkbox" id="incluirHer"> incluir también las «heredadas»</label></div>
+      <div class="nota">Se desplaza según la posición de la cabeza de cada pose y las deja «heredadas» (amarillo). Revisa cada una y márcala ✓ cuando esté bien; la que ajustes a mano queda ✓ sola.</div>
+    </div>
+    <div class="panel">
+      <h2>Boca · forma</h2>
+      <div class="botones" id="botonesVisema"></div>
+      <div class="fila" style="margin-top:10px">
+        <button id="anima">▶ Animar bocas</button>
+        <label><input type="checkbox" id="guias" checked> guías</label>
+      </div>
+      <div class="fila"><label class="t">Fantasma</label><select id="fantasma" style="width:auto"></select></div>
+      <div class="fila"><label><input type="checkbox" id="vinc"> mover todas las formas a la vez (ajuste grueso)</label></div>
+      <h3>Posición, tamaño y giro de <span id="nombreForma">A</span></h3>
+      <div class="fila"><label class="t">Centro X</label><input type="number" id="px" step="1"></div>
+      <div class="fila"><label class="t">Centro Y</label><input type="number" id="py" step="1"></div>
+      <div class="fila"><label class="t">Escala</label><input type="range" id="sR" min="0.03" max="0.6" step="0.001"><input type="number" id="sN" step="0.001"></div>
+      <div class="fila"><label class="t">Giro (°)</label><input type="range" id="rR" min="-40" max="40" step="0.1"><input type="number" id="rN" step="0.1"></div>
+      <div class="fila"><label><input type="checkbox" id="mForma"> reflejar solo esta forma</label></div>
+      <div class="fila"><button id="reiniciaForma">Reiniciar esta forma</button><button id="todas">Reiniciar todas</button></div>
+      <div class="fila"><label class="t">Cambiar imagen</label><input type="file" id="archivoBoca" accept="image/png"></div>
+    </div>
+    <div class="panel">
+      <h2>Parpadeo</h2>
+      <div class="botones" id="botonesOjos"></div>
+      <div class="fila" style="margin-top:8px"><button id="animaOjos">▶ Parpadear</button>
+        <label><input type="checkbox" id="verCaja" checked> ver recuadro</label></div>
+      <div class="fila"><label class="t">Mover con el ratón</label>
+        <select id="modoMover" style="width:auto"><option value="boca">la boca</option><option value="parche">el parche de ojos</option><option value="caja">el recuadro</option></select></div>
+      <div class="fila"><label class="t">Borde suave</label><input type="range" id="blur" min="0" max="30" step="1" value="10"><span id="blurN" class="nota">10 px</span></div>
+      <div class="fila"><label class="t">Recuadro (ancho, alto)</label>
+        <input type="number" id="cw" step="2" title="ancho"> <input type="number" id="ch" step="2" title="alto"> <button id="tamTodas" title="Pone este ancho y alto en el recuadro de todas las poses de la vista">igualar todas</button></div>
+      <div class="nota" id="notaOjos"></div>
+      <div class="nota">«Parche» = de dónde se toman los ojos de la imagen de parpadeo; «recuadro» = dónde se pegan en la pose. El parpadeo de esta vista se muestra pegando solo el recuadro sobre la pose abierta.</div>
+    </div>
+    <div class="panel">
+      <h2>Guardar</h2>
+      <div class="fila"><button id="descargar" class="activo">Descargar calibración de esta vista</button></div>
+      <div class="fila"><button id="copiar">Copiar</button><button id="cargar">Cargar lo pegado</button><span id="estado" class="nota"></span></div>
+      <textarea id="json" spellcheck="false"></textarea>
+      <div class="nota">El archivo descargado se importa con <b>python -m src.biblioteca importar-poses --calibraciones archivo.json</b>. Incluye bocas por forma y los datos del parpadeo.</div>
+    </div>
+  </aside>
+</main>
+<script src="datos_editor.js"></script>
+<script>
+const VISEMAS = "ABCDEFGHX".split("");
+const $ = id => document.getElementById(id);
+const cv = $("principal"), cx = cv.getContext("2d"), cz = $("zoom"), czx = cz.getContext("2d");
+const ZW = 1620, ZH = 900, ZVX = 640, ZVY = 360;           // zoom: ventana de 640x360 px de la pose
+
+// ---------- estado ----------
+let vistaId = Object.keys(DATOS.vistas)[0];
+let pose = null, est = null, actual = "A", escena = new Image(), animando = null, animandoOjos = null;
+let ojos = "abiertos", mover = "boca";
+const imgsBoca = {};                    // imgsBoca[vista][forma]
+const memoria = {};                     // `${pose}|dir|esp` -> {formas}
+const lado = {};                        // pose -> reflejada?
+const estadoDe = {};                    // pose -> ok | her | pend
+const ajuste = { fuente: {}, caja: {} };   // desplazamiento del parche por imagen de parpadeo; recuadro ajustado a mano por pose
+const cacheImg = {};
+const V = () => DATOS.vistas[vistaId];
+const POSES = () => V().poses;
+const clave = () => pose.nombre + "|" + ($("espejo").checked ? "esp" : "dir");
+
+function cargaImg(src) {
+  if (!cacheImg[src]) { const i = new Image(); i.onload = () => { i.listo = true; dibujar(); rejilla(); }; i.src = src; cacheImg[src] = i; }
+  return cacheImg[src];
+}
+
+// ---------- valores de partida ----------
+function bocaDefecto(v) {                // tamaño de partida: la forma A mide ~115 px de ancho, el resto con su misma escala
+  const a = imgsBoca[vistaId].A; return 115 / a.naturalWidth;
+}
+function anclaVista() {                  // centro de la boca de la pose de referencia: bajo la montura de las gafas
+  const c = V().caja_ref; return [c[0] + c[2] / 2, c[1] + c[3] + 78];
+}
+function porDefecto(p) {
+  const s = bocaDefecto(), [ax, ay] = anclaVista(), o = {};
+  VISEMAS.forEach(v => { const im = imgsBoca[vistaId][v]; o[v] = { x: ax + p.dcab[0], y: ay + p.dcab[1] - im.naturalHeight * s / 2 + im.naturalHeight * s / 2 + 0, s: s, r: 0, m: false }; });
+  // las formas se alinean por su borde superior: la A (labios cerrados) queda en la línea de la boca
+  const topA = ay + p.dcab[1] - imgsBoca[vistaId].A.naturalHeight * s / 2;
+  VISEMAS.forEach(v => { const im = imgsBoca[vistaId][v]; o[v].y = topA + im.naturalHeight * s / 2; });
+  return o;
+}
+function cargarPrecarga() {
+  const pre = DATOS.precarga || {};
+  Object.keys(pre).forEach(n => { const p = pre[n]; memoria[n + "|" + (p.espejo ? "esp" : "dir")] = { formas: JSON.parse(JSON.stringify(p.formas)) }; lado[n] = !!p.espejo; estadoDe[n] = "ok"; });
+}
+function iniciarEstados() { Object.values(DATOS.vistas).forEach(v => v.poses.forEach(p => { if (!estadoDe[p.nombre]) estadoDe[p.nombre] = "pend"; })); }
+
+// ---------- carga de vista y pose ----------
+Object.keys(DATOS.vistas).forEach(id => {
+  const b = document.createElement("button"); b.textContent = DATOS.vistas[id].titulo; b.dataset.id = id; b.onclick = () => cambiaVista(id); $("pestanasVista").appendChild(b);
+});
+VISEMAS.forEach(v => { const b = document.createElement("button"); b.textContent = v; b.dataset.v = v; b.onclick = () => { actual = v; dibujar(); rejilla(); }; $("botonesVisema").appendChild(b); });
+["abiertos", "medio", "cerrado"].forEach((n, i) => { const b = document.createElement("button"); b.textContent = (i + 1) + " " + n; b.dataset.o = n; b.onclick = () => ponOjos(n); $("botonesOjos").appendChild(b); });
+const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "(ninguno)"; $("fantasma").appendChild(o0);
+VISEMAS.forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = v; $("fantasma").appendChild(o); });
+
+function cargarBocas(id, fin) {
+  imgsBoca[id] = {}; let falta = VISEMAS.length;
+  VISEMAS.forEach(v => { const i = new Image(); i.onload = () => { if (--falta === 0) fin(); }; i.src = DATOS.vistas[id].bocas.replace("{}", v); imgsBoca[id][v] = i; });
+}
+function etiquetaPose(p) { const e = estadoDe[p.nombre]; return (e === "ok" ? "● " : e === "her" ? "◐ " : "○ ") + p.nombre; }
+function llenaSelect() {
+  $("pose").innerHTML = ""; POSES().forEach((p, i) => { const o = document.createElement("option"); o.value = i; o.textContent = etiquetaPose(p); $("pose").appendChild(o); });
+}
+function cambiaVista(id, nombrePose) {
+  vistaId = id; document.querySelectorAll("#pestanasVista button").forEach(b => b.classList.toggle("activo", b.dataset.id === id));
+  const seguir = () => { llenaSelect(); const i = Math.max(0, POSES().findIndex(p => p.nombre === nombrePose)); construyeRejilla(); cargaPose(i); };
+  if (imgsBoca[id]) seguir(); else cargarBocas(id, seguir);
+}
+function cargaPose(i) {
+  pose = POSES()[i]; $("pose").value = i;
+  if (lado[pose.nombre] !== undefined) $("espejo").checked = lado[pose.nombre]; else $("espejo").checked = false;
+  escena = new Image(); escena.onload = () => { cargaEstado(); dibujar(); rejilla(); }; escena.src = pose.archivo;
+  cargaImg(pose.archivo);
+}
+function cargaEstado() {
+  if (memoria[clave()]) { est = JSON.parse(JSON.stringify(memoria[clave()])); return; }
+  try { const g = localStorage.getItem("ed_" + clave()); if (g) { est = JSON.parse(g); return; } } catch (e) {}
+  est = { formas: porDefecto(pose) };
+}
+$("pose").onchange = e => cargaPose(parseInt(e.target.value));
+$("espejo").onchange = () => { cargaEstado(); dibujar(); rejilla(); };
+const irPose = d => { const n = POSES().length, i = (parseInt($("pose").value) + d + n) % n; cargaPose(i); };
+$("btnPrev").onclick = () => irPose(-1); $("btnSig").onclick = () => irPose(1);
+$("btnSigPend").onclick = () => { const L = POSES(), i0 = parseInt($("pose").value); for (let k = 1; k <= L.length; k++) { const i = (i0 + k) % L.length; if (estadoDe[L[i].nombre] !== "ok") { cargaPose(i); return; } } $("estado").textContent = "No quedan poses por revisar 🎉"; $("estado").className = "nota ok"; };
+
+// ---------- parpadeo ----------
+function imagenOjos() {           // imagen de parpadeo que corresponde a esta pose y al estado de ojos elegido
+  const P = V().parpadeo; if (!P || ojos === "abiertos") return null;
+  const clave = P.modo === "compartido" ? ojos : (ojos === "cerrado" ? pose.nombre : null);
+  const d = clave && P.imagenes[clave]; return d ? { id: P.modo + ":" + (P.modo === "compartido" ? clave : pose.nombre), d } : null;
+}
+function cajaDe(p) { return ajuste.caja[p.nombre] || p.caja; }      // recuadro de los ojos de la pose: el detectado por la montura o el que ajustaste
+function despFuente(id) { return ajuste.fuente[id] || [0, 0]; }
+function pintaOjos(c, ox, oy, z, fantasma) {
+  const o = imagenOjos(); if (!o) return;
+  const im = cargaImg(o.d.archivo); if (!im.listo) return;
+  const [bx, by, bw, bh] = cajaDe(pose), df = despFuente(o.id);
+  // la imagen de parpadeo se coloca para que su cabeza coincida con la de la pose, más el ajuste manual
+  const sx = pose.centro[0] - o.d.centro[0] + df[0], sy = pose.centro[1] - o.d.centro[1] + df[1];
+  const m = Math.max(0, +$("blur").value), W = Math.ceil(bw + 2 * m), H = Math.ceil(bh + 2 * m);
+  const tmp = document.createElement("canvas"); tmp.width = W; tmp.height = H; const t = tmp.getContext("2d");
+  t.drawImage(im, bx - m - sx, by - m - sy, W, H, 0, 0, W, H);                       // trozo de la imagen de parpadeo
+  const mask = document.createElement("canvas"); mask.width = W; mask.height = H; const k = mask.getContext("2d");
+  k.filter = m > 0 ? `blur(${m / 2}px)` : "none"; k.fillStyle = "#fff"; k.fillRect(m * 1.2, m * 1.2, W - m * 2.4, H - m * 2.4);
+  t.globalCompositeOperation = "destination-in"; t.drawImage(mask, 0, 0);
+  c.drawImage(tmp, (bx - m - ox) * z, (by - m - oy) * z, W * z, H * z);
+}
+function ponOjos(n) { ojos = n; dibujar(); }
+$("blur").oninput = () => { $("blurN").textContent = $("blur").value + " px"; dibujar(); };
+$("verCaja").onchange = dibujar;
+$("modoMover").onchange = e => { mover = e.target.value; dibujar(); };
+const tamCaja = () => cajaDe(pose).slice(2);
+["cw", "ch"].forEach((id, k) => $(id).addEventListener("input", e => { const x = parseFloat(e.target.value); if (isNaN(x) || x <= 10) return;
+  const c = cajaDe(pose).slice(), cen = [c[0] + c[2] / 2, c[1] + c[3] / 2]; c[2 + k] = x; c[0] = cen[0] - c[2] / 2; c[1] = cen[1] - c[3] / 2; ajuste.caja[pose.nombre] = c; dibujar(); }));
+$("tamTodas").onclick = () => { const [w, h] = tamCaja(); POSES().forEach(p => { const c = cajaDe(p), cen = [c[0] + c[2] / 2, c[1] + c[3] / 2]; ajuste.caja[p.nombre] = [cen[0] - w / 2, cen[1] - h / 2, w, h]; }); dibujar(); $("estado").textContent = "Tamaño copiado a todas las poses ✓"; $("estado").className = "nota ok"; };
+$("animaOjos").onclick = () => {
+  if (animandoOjos) { clearInterval(animandoOjos); animandoOjos = null; ojos = "abiertos"; $("animaOjos").textContent = "▶ Parpadear"; dibujar(); return; }
+  const tiene = V().parpadeo && V().parpadeo.modo === "compartido"; const sec = tiene ? ["abiertos", "medio", "cerrado", "medio", "abiertos", "abiertos", "abiertos", "abiertos"] : ["abiertos", "cerrado", "abiertos", "abiertos", "abiertos", "abiertos"];
+  let i = 0; animandoOjos = setInterval(() => { ojos = sec[i++ % sec.length]; dibujar(); }, 140); $("animaOjos").textContent = "■ Detener";
+};
+
+// ---------- dibujo ----------
+function geom(v) { const f = est.formas[v], im = imgsBoca[vistaId][v]; return { cx: f.x, cy: f.y, w: im.naturalWidth * f.s, h: im.naturalHeight * f.s, rot: f.r || 0 }; }
+function pinta(c, v, ox, oy, z) {
+  const g = geom(v); c.save(); c.translate((g.cx - ox) * z, (g.cy - oy) * z); c.rotate(g.rot * Math.PI / 180);
+  if ($("espejo").checked !== !!est.formas[v].m) c.scale(-1, 1);
+  c.drawImage(imgsBoca[vistaId][v], -g.w / 2 * z, -g.h / 2 * z, g.w * z, g.h * z); c.restore();
+}
+function focoZoom() {
+  if (mover !== "boca" || ojos !== "abiertos") { const [bx, by, bw, bh] = cajaDe(pose); return [bx + bw / 2, by + bh / 2]; }
+  const f = est.formas[actual]; return [f.x, f.y];
+}
+function dibujar() {
+  if (!escena.complete || !escena.naturalWidth || !est) return;
+  const [fx, fy] = focoZoom(), Z = ZW / ZVX, ox = fx - ZVX / 2, oy = fy - ZVY * 0.42;
+  cx.drawImage(escena, 0, 0);
+  czx.imageSmoothingQuality = "high"; czx.drawImage(escena, ox, oy, ZVX, ZVY, 0, 0, ZW, ZH);
+  pintaOjos(cx, 0, 0, 1); pintaOjos(czx, ox, oy, Z);
+  const fant = $("fantasma").value;
+  if (fant && fant !== actual) { cx.globalAlpha = czx.globalAlpha = 0.38; pinta(cx, fant, 0, 0, 1); pinta(czx, fant, ox, oy, Z); cx.globalAlpha = czx.globalAlpha = 1; }
+  pinta(cx, actual, 0, 0, 1); pinta(czx, actual, ox, oy, Z);
+  const f = est.formas[actual];
+  if ($("guias").checked) {
+    cx.strokeStyle = czx.strokeStyle = "rgba(0,255,120,.85)"; cx.lineWidth = 3; cx.setLineDash([12, 12]); czx.setLineDash([8, 8]);
+    cx.beginPath(); cx.moveTo(f.x - 140, f.y); cx.lineTo(f.x + 140, f.y); cx.moveTo(f.x, f.y - 80); cx.lineTo(f.x, f.y + 80); cx.stroke();
+    cx.setLineDash([]); czx.setLineDash([]);
+  }
+  if ($("verCaja").checked) {
+    const [bx, by, bw, bh] = cajaDe(pose); cx.strokeStyle = czx.strokeStyle = "rgba(255,200,0,.9)"; cx.lineWidth = 3; cx.setLineDash([10, 8]); czx.setLineDash([10, 8]);
+    cx.strokeRect(bx, by, bw, bh); czx.lineWidth = 3; czx.strokeRect((bx - ox) * Z, (by - oy) * Z, bw * Z, bh * Z); cx.setLineDash([]); czx.setLineDash([]);
+  }
+  sincronizar();
+}
+function sincronizar() {
+  const f = est.formas[actual];
+  $("px").value = Math.round(f.x); $("py").value = Math.round(f.y); $("sR").value = f.s; $("sN").value = f.s.toFixed(3);
+  $("mForma").checked = !!f.m; $("rR").value = f.r || 0; $("rN").value = (f.r || 0).toFixed(1); $("nombreForma").textContent = actual;
+  const t = tamCaja(); if (document.activeElement !== $("cw")) $("cw").value = Math.round(t[0]); if (document.activeElement !== $("ch")) $("ch").value = Math.round(t[1]);
+  document.querySelectorAll("#botonesVisema button").forEach(b => b.classList.toggle("activo", b.dataset.v === actual));
+  document.querySelectorAll("#botonesOjos button").forEach(b => { b.classList.toggle("activo", b.dataset.o === ojos); b.disabled = b.dataset.o === "medio" && V().parpadeo && V().parpadeo.modo !== "compartido"; });
+  const P = V().parpadeo; $("notaOjos").textContent = !P ? "Esta vista no tiene imágenes de parpadeo." : P.modo === "compartido" ? "Parpadeo compartido por todas las poses de la vista (cerrado y medio)." : (P.imagenes[pose.nombre] ? "Esta pose tiene su propio parpadeo (cerrado). No hay intermedio." : "⚠ Esta pose no tiene imagen de parpadeo.");
+  memoria[clave()] = JSON.parse(JSON.stringify(est)); lado[pose.nombre] = $("espejo").checked;
+  try { localStorage.setItem("ed_" + clave(), JSON.stringify(est)); } catch (e) {}
+  pintaEstado();
+  if (document.activeElement !== $("json")) $("json").value = salidaVista();
+}
+function pintaEstado() {
+  const e = estadoDe[pose.nombre], el = $("estadoPose");
+  el.className = "estadoPose " + e; el.textContent = e === "ok" ? "● calibrada/revisada" : e === "her" ? "◐ heredada, por revisar" : "○ pendiente";
+  $("btnRevisada").textContent = e === "ok" ? "Quitar ✓" : "Marcar revisada ✓";
+  const o = $("pose").options[parseInt($("pose").value)]; if (o) o.textContent = etiquetaPose(pose);
+  const L = POSES(); const n = k => L.filter(p => estadoDe[p.nombre] === k).length;
+  $("resumen").textContent = `· ${n("ok")} revisadas · ${n("her")} heredadas · ${n("pend")} pendientes`;
+  document.querySelectorAll(".celda").forEach(c => { c.className = "celda " + estadoDe[c.dataset.n] + (c.dataset.n === pose.nombre ? " sel" : ""); });
+}
+const tocar = () => { if (estadoDe[pose.nombre] !== "ok") estadoDe[pose.nombre] = "ok"; };
+$("btnRevisada").onclick = () => { estadoDe[pose.nombre] = estadoDe[pose.nombre] === "ok" ? "pend" : "ok"; pintaEstado(); $("json").value = salidaVista(); };
+
+// ---------- rejilla ----------
+const RW = 240, RH = 170;
+function construyeRejilla() {
+  const r = $("rejilla"); r.innerHTML = "";
+  POSES().forEach((p, i) => { const d = document.createElement("div"); d.className = "celda"; d.dataset.n = p.nombre; const c = document.createElement("canvas"); c.width = RW; c.height = RH; d.appendChild(c);
+    const s = document.createElement("span"); s.textContent = p.nombre.replace(vistaId + "_", ""); d.appendChild(s); d.onclick = () => cargaPose(i); r.appendChild(d); });
+}
+let rPend = false;
+function rejilla() { if (rPend) return; rPend = true; requestAnimationFrame(() => { rPend = false; pintaRejilla(); }); }
+function pintaRejilla() {
+  if (!est) return;
+  POSES().forEach((p, i) => {
+    const c = document.querySelector(`.celda[data-n="${p.nombre}"] canvas`); if (!c) return; const k = c.getContext("2d");
+    const im = cargaImg(p.mini); k.fillStyle = "#000"; k.fillRect(0, 0, RW, RH); if (!im.listo) return;
+    let formas = (p.nombre === pose.nombre) ? est.formas : null, esp = (p.nombre === pose.nombre) ? $("espejo").checked : !!lado[p.nombre];
+    if (!formas) { const m = memoria[p.nombre + "|" + (esp ? "esp" : "dir")]; formas = m ? m.formas : porDefecto(p); }
+    const f = formas[actual], u = 1 / 3, Zr = 1.5, w = RW / Zr, h = RH / Zr, ox = f.x * u - w / 2, oy = f.y * u - h * 0.42;
+    k.imageSmoothingQuality = "high"; k.drawImage(im, ox, oy, w, h, 0, 0, RW, RH);
+    const b = imgsBoca[vistaId][actual], s = f.s * u * Zr, bw = b.naturalWidth * s, bh = b.naturalHeight * s;
+    k.save(); k.translate((f.x * u - ox) * Zr, (f.y * u - oy) * Zr); k.rotate((f.r || 0) * Math.PI / 180); if (esp !== !!f.m) k.scale(-1, 1); k.drawImage(b, -bw / 2, -bh / 2, bw, bh); k.restore();
+  });
+}
+
+// ---------- edición ----------
+const objetivos = () => $("vinc").checked ? VISEMAS : [actual];
+const num = (id, fn) => $(id).addEventListener("input", e => { const x = parseFloat(e.target.value); if (!isNaN(x)) { fn(x); tocar(); dibujar(); rejilla(); } });
+num("px", x => { const d = x - est.formas[actual].x; objetivos().forEach(v => est.formas[v].x += d); });
+num("py", x => { const d = x - est.formas[actual].y; objetivos().forEach(v => est.formas[v].y += d); });
+num("sR", x => est.formas[actual].s = x); num("sN", x => est.formas[actual].s = x);
+num("rR", x => est.formas[actual].r = x); num("rN", x => est.formas[actual].r = x);
+$("guias").onchange = dibujar; $("fantasma").onchange = dibujar;
+$("mForma").onchange = () => { est.formas[actual].m = $("mForma").checked; tocar(); dibujar(); rejilla(); };
+$("reiniciaForma").onclick = () => { est.formas[actual] = porDefecto(pose)[actual]; tocar(); dibujar(); rejilla(); };
+$("todas").onclick = () => { est = { formas: porDefecto(pose) }; tocar(); dibujar(); rejilla(); };
+$("archivoBoca").onchange = e => { const f = e.target.files[0]; if (!f) return; const i = new Image(); i.onload = () => { imgsBoca[vistaId][actual] = i; dibujar(); rejilla(); }; i.src = URL.createObjectURL(f); };
+$("anima").onclick = () => {
+  if (animando) { clearInterval(animando); animando = null; $("anima").textContent = "▶ Animar bocas"; return; }
+  const sec = ["X", "B", "C", "D", "C", "E", "F", "G", "H", "A"]; let i = 0;
+  animando = setInterval(() => { actual = sec[i++ % sec.length]; dibujar(); rejilla(); }, 350); $("anima").textContent = "■ Detener";
+};
+$("btnAplicar").onclick = () => {
+  const origen = POSES().find(p => p.nombre === pose.nombre), esp = $("espejo").checked; let n = 0;
+  POSES().forEach(p => {
+    if (p.nombre === origen.nombre) return;
+    const e = estadoDe[p.nombre]; if (e === "ok" || (e === "her" && !$("incluirHer").checked)) return;
+    const dx = p.dcab[0] - origen.dcab[0], dy = p.dcab[1] - origen.dcab[1], formas = {};
+    VISEMAS.forEach(v => { const f = est.formas[v]; formas[v] = { x: f.x + dx, y: f.y + dy, s: f.s, r: f.r || 0, m: !!f.m }; });
+    memoria[p.nombre + "|" + (esp ? "esp" : "dir")] = { formas }; lado[p.nombre] = esp; estadoDe[p.nombre] = "her"; n++;
+  });
+  pintaEstado(); rejilla(); llenaSelect(); $("pose").value = POSES().indexOf(pose); $("estado").textContent = `Copiada a ${n} poses (amarillo) ✓`; $("estado").className = "nota ok";
+};
+
+// ratón y teclado: mueve la boca, el parche de ojos o el recuadro según el modo
+let arr = null;
+const posRaton = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height }; };
+function mueveModo(dx, dy) {
+  if (mover === "boca") { objetivos().forEach(v => { est.formas[v].x += dx; est.formas[v].y += dy; }); tocar(); return; }
+  if (mover === "parche") { const o = imagenOjos(); if (!o) return; const d = despFuente(o.id).slice(); ajuste.fuente[o.id] = [d[0] - dx, d[1] - dy]; return; }
+  const c = cajaDe(pose); ajuste.caja[pose.nombre] = [c[0] + dx, c[1] + dy, c[2], c[3]];
+}
+cv.addEventListener("mousedown", e => { arr = { p: posRaton(e) }; });
+window.addEventListener("mousemove", e => { if (!arr) return; const p = posRaton(e), dx = p.x - arr.p.x, dy = p.y - arr.p.y; arr.p = p; mueveModo(dx, dy); dibujar(); rejilla(); });
+window.addEventListener("mouseup", () => arr = null);
+window.addEventListener("keydown", e => {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+  const k = e.key.toUpperCase();
+  if (VISEMAS.includes(k)) { actual = k; dibujar(); rejilla(); return; }
+  if (k === "M") { mover = mover === "boca" ? "parche" : "boca"; $("modoMover").value = mover; dibujar(); return; }
+  if (e.key === "1") { ponOjos("abiertos"); return; } if (e.key === "2") { ponOjos("medio"); return; } if (e.key === "3") { ponOjos("cerrado"); return; }
+  if (e.key === "PageDown") { irPose(1); e.preventDefault(); return; } if (e.key === "PageUp") { irPose(-1); e.preventDefault(); return; }
+  const paso = e.shiftKey ? 5 : 1; let m = true;
+  if (e.key === "ArrowLeft") mueveModo(-paso, 0); else if (e.key === "ArrowRight") mueveModo(paso, 0);
+  else if (e.key === "ArrowUp") mueveModo(0, -paso); else if (e.key === "ArrowDown") mueveModo(0, paso);
+  else if (e.key === "[") { objetivos().forEach(v => est.formas[v].r = (est.formas[v].r || 0) - (e.shiftKey ? 2 : 0.5)); tocar(); }
+  else if (e.key === "]") { objetivos().forEach(v => est.formas[v].r = (est.formas[v].r || 0) + (e.shiftKey ? 2 : 0.5)); tocar(); } else m = false;
+  if (m) { e.preventDefault(); dibujar(); rejilla(); }
+});
+
+// ---------- guardar / cargar ----------
+function salidaVista() {
+  const poses = {};
+  POSES().forEach(p => {
+    const e = lado[p.nombre]; if (e === undefined || estadoDe[p.nombre] === "pend") return;
+    const m = memoria[p.nombre + "|" + (e ? "esp" : "dir")]; if (!m) return;
+    poses[p.nombre] = { espejo: e, estado: estadoDe[p.nombre], formas: Object.fromEntries(VISEMAS.map(v => [v, { x: Math.round(m.formas[v].x), y: Math.round(m.formas[v].y), s: +m.formas[v].s.toFixed(4), r: +(m.formas[v].r || 0).toFixed(2), m: !!m.formas[v].m }])) };
+  });
+  const o = { version: 5, juego: vistaId, poses };
+  const P = V().parpadeo;
+  if (P) {
+    o.parpadeo = { modo: P.modo, borde_suave_px: +$("blur").value, imagenes: {}, cajas: {} };
+    Object.keys(P.imagenes).forEach(k => { const id = P.modo + ":" + k, d = despFuente(id); o.parpadeo.imagenes[k] = { archivo: P.imagenes[k].archivo.split("/").pop(), centro: P.imagenes[k].centro, desp: [Math.round(d[0]), Math.round(d[1])] }; });
+    POSES().forEach(p => { o.parpadeo.cajas[p.nombre] = cajaDe(p).map(Math.round); });
+  }
+  return JSON.stringify(o, null, 1);
+}
+$("copiar").onclick = async () => { const t = salidaVista(); try { await navigator.clipboard.writeText(t); } catch (e) { $("json").select(); document.execCommand("copy"); } $("estado").textContent = "Copiado ✓"; $("estado").className = "nota ok"; };
+$("descargar").onclick = () => {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([salidaVista()], { type: "application/json" }));
+  a.download = `calibracion_${vistaId}.json`; a.click(); $("estado").textContent = "Descargado ✓ (revisa tu carpeta Descargas)"; $("estado").className = "nota ok";
+};
+$("cargar").onclick = () => {
+  try {
+    const o = JSON.parse($("json").value), pre = vistaId + "_"; let n = 0;
+    Object.keys(o.poses || {}).forEach(k => { const id = k.startsWith(pre) ? k : pre + k, p = o.poses[k];
+      if (!POSES().some(q => q.nombre === id)) return;
+      memoria[id + "|" + (p.espejo ? "esp" : "dir")] = { formas: p.formas }; lado[id] = !!p.espejo; estadoDe[id] = p.estado === "her" ? "her" : "ok"; n++; });
+    const P = o.parpadeo; if (P) { Object.keys(P.cajas || {}).forEach(k => { if (POSES().some(q => q.nombre === k)) ajuste.caja[k] = P.cajas[k]; });
+      Object.keys(P.imagenes || {}).forEach(k => { ajuste.fuente[P.modo + ":" + k] = P.imagenes[k].desp || [0, 0]; });
+      if (P.borde_suave_px != null) { $("blur").value = P.borde_suave_px; $("blurN").textContent = P.borde_suave_px + " px"; } }
+    if (lado[pose.nombre] !== undefined) $("espejo").checked = lado[pose.nombre];
+    cargaEstado(); $("json").blur(); llenaSelect(); $("pose").value = POSES().indexOf(pose); dibujar(); rejilla(); $("estado").textContent = `Cargadas ${n} poses ✓`; $("estado").className = "nota ok";
+  } catch (e) { $("estado").textContent = "JSON no válido"; $("estado").className = "nota"; }
+};
+
+// ---------- arranque ----------
+cargarPrecarga(); iniciarEstados();
+cambiaVista(vistaId);
+</script>
+</body>
+</html>

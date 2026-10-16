@@ -70,6 +70,20 @@
         "Temp Real Assest Testing/Calibrador4"
       ],
       "port": 8769
+    },
+    {
+      "name": "editor-poses",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8770",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "prototipos"
+      ],
+      "port": 8770
     }
   ]
 }

@@ -255,3 +255,15 @@ def test_un_nombre_corto_ambiguo_sin_juego_no_adivina(proyecto_tmp, origen):
                     encoding="utf-8")
     inf = _importar(proyecto_tmp, [origen, origen.parent / "Frontal"], ruta, {VISTA: _bocas(proyecto_tmp / "b")})
     assert any("neutro_01" in a and "ambigu" in a.lower() for a in inf.avisos)
+
+
+def test_acepta_el_json_del_editor_de_poses_con_estado_y_parpadeo(proyecto_tmp, origen):
+    ruta = proyecto_tmp / "editor.json"
+    ruta.write_text(json.dumps({
+        "version": 5, "juego": "tres_cuartos",
+        "poses": {f"{VISTA}_neutro_01": {"espejo": False, "estado": "ok", "formas": _formas()},
+                  f"{VISTA}_explicar_01": {"espejo": True, "estado": "her", "formas": _formas()}},
+        "parpadeo": {"modo": "por_pose", "borde_suave_px": 10, "imagenes": {}, "cajas": {}}}), encoding="utf-8")
+    inf = _importar(proyecto_tmp, origen, ruta, {VISTA: _bocas(proyecto_tmp / "b")})
+    assert not [a for a in inf.avisos if "sin calibración" in a and ("neutro_01" in a or "explicar_01" in a)]
+    assert cargar_pose(proyecto_tmp / "personajes" / "profe" / "poses" / f"{VISTA}_explicar_01").espejo is True
