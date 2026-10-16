@@ -768,6 +768,7 @@
   "imagenes": {
    "tres_cuartos_der_bienvenida_01": {
     "archivo": "tres_cuartos_der_bienvenida_01_cerrado.jpg",
+    "original": "tres_cuartos_der_bienvenida_01_parpadeo.png",
     "centro": [
      2026.7,
      173.4
@@ -779,6 +780,7 @@
    },
    "tres_cuartos_der_bienvenida_02": {
     "archivo": "tres_cuartos_der_bienvenida_02_cerrado.jpg",
+    "original": "tres_cuartos_der_bienvenida_02_parpadeo.png",
     "centro": [
      1914.7,
      173.4
@@ -790,6 +792,7 @@
    },
    "tres_cuartos_der_bienvenida_03": {
     "archivo": "tres_cuartos_der_bienvenida_03_cerrado.jpg",
+    "original": "tres_cuartos_der_bienvenida_03_parpadeo.png",
     "centro": [
      1901.4,
      179.3
@@ -801,6 +804,7 @@
    },
    "tres_cuartos_der_explicar_01": {
     "archivo": "tres_cuartos_der_explicar_01_cerrado.jpg",
+    "original": "tres_cuartos_der_explicar_01_parpadeo.png",
     "centro": [
      1936.2,
      167.3
@@ -812,6 +816,7 @@
    },
    "tres_cuartos_der_libreta_01": {
     "archivo": "tres_cuartos_der_libreta_01_cerrado.jpg",
+    "original": "tres_cuartos_der_libreta_01_parpadeo.png",
     "centro": [
      1896.4,
      167.2
@@ -823,6 +828,7 @@
    },
    "tres_cuartos_der_libreta_02": {
     "archivo": "tres_cuartos_der_libreta_02_cerrado.jpg",
+    "original": "tres_cuartos_der_libreta_02_parpadeo.png",
     "centro": [
      1953.8,
      173.9
@@ -834,6 +840,7 @@
    },
    "tres_cuartos_der_libreta_03": {
     "archivo": "tres_cuartos_der_libreta_03_cerrado.jpg",
+    "original": "tres_cuartos_der_libreta_03_parpadeo.png",
     "centro": [
      1890.6,
      175.6
@@ -845,6 +852,7 @@
    },
    "tres_cuartos_der_neutro_01": {
     "archivo": "tres_cuartos_der_neutro_01_cerrado.jpg",
+    "original": "tres_cuartos_der_neutro_01_parpadeo.png",
     "centro": [
      1943.4,
      167.4
@@ -856,6 +864,7 @@
    },
    "tres_cuartos_der_pregunta_01": {
     "archivo": "tres_cuartos_der_pregunta_01_cerrado.jpg",
+    "original": "tres_cuartos_der_pregunta_01_parpadeo.png",
     "centro": [
      2034.4,
      175.7
@@ -867,6 +876,7 @@
    },
    "tres_cuartos_der_pulgar_01": {
     "archivo": "tres_cuartos_der_pulgar_01_cerrado.jpg",
+    "original": "tres_cuartos_der_pulgar_01_parpadeo.png",
     "centro": [
      1908.2,
      177.4
@@ -878,6 +888,7 @@
    },
    "tres_cuartos_der_señalar_01": {
     "archivo": "tres_cuartos_der_señalar_01_cerrado.jpg",
+    "original": "tres_cuartos_der_señalar_01_parpadeo.png",
     "centro": [
      1808.9,
      164.6

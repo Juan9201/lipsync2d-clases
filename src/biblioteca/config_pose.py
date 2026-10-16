@@ -1,6 +1,6 @@
 """Escritura del config.yaml de una pose (contrato config-pose-escenario.md)."""
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 
 import yaml
 
@@ -33,7 +33,7 @@ def escribir_config_pose(carpeta: Path, id_pose: str, nombre: str, lienzo: Tuple
 def escribir_config_pose_v4(carpeta: Path, vista: str, gesto: str, variante: int, lienzo: Tuple[int, int],
                             formas: Dict[str, dict], espejo: bool = False, bocas_de: Optional[str] = None,
                             tipo: Optional[str] = None, cabeza: Optional[Tuple[float, float]] = None,
-                            pelo: Optional[Tuple[float, float]] = None, parpadeo: bool = False,
+                            pelo: Optional[Tuple[float, float]] = None, parpadeo: Union[bool, dict, None] = False,
                             ojos_de: Optional[str] = None) -> Path:
     """config.yaml de una pose de la v3: vista, gesto, variante y calibración de boca por forma
     (x, y, s, r, m). `formas` vacío = pose importada sin calibrar."""
@@ -41,7 +41,7 @@ def escribir_config_pose_v4(carpeta: Path, vista: str, gesto: str, variante: int
     config = {
         "version": 4, "id": carpeta.name, "vista": vista, "gesto": gesto, "variante": int(variante),
         "lienzo": [int(lienzo[0]), int(lienzo[1])], "espejo": bool(espejo), "bocas_de": bocas_de,
-        "parpadeo": bool(parpadeo),
+        "parpadeo": parpadeo if isinstance(parpadeo, dict) else bool(parpadeo),
     }
     if tipo:
         config["tipo"] = tipo

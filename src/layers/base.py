@@ -20,6 +20,14 @@ class ContextoFrame:
     escala: float      # respiración
     dx: float          # movimiento leve, en píxeles del lienzo
     dy: float
+    fase_ojos: str = "abierto"   # «abierto», «medio» o «cerrado» (parpadeo por imagen); sin ella vale `parpadeando`
+
+    @property
+    def ojos(self) -> str:
+        """Fase de los ojos: la explícita o, si solo se indicó `parpadeando`, «cerrado»."""
+        if self.fase_ojos != "abierto":
+            return self.fase_ojos
+        return "cerrado" if self.parpadeando else "abierto"
 
 
 @dataclass(frozen=True)

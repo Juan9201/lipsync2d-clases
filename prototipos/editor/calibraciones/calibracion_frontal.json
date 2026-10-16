@@ -2217,6 +2217,7 @@
   "imagenes": {
    "cerrado": {
     "archivo": "cerrado.jpg",
+    "original": "Frontal_Blink_Color.png",
     "centro": [
      1904.7,
      160.7
@@ -2228,6 +2229,7 @@
    },
    "medio": {
     "archivo": "medio.jpg",
+    "original": "Frontal_Blink_Middle.png",
     "centro": [
      1914,
      174.8

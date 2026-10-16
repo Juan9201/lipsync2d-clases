@@ -28,10 +28,27 @@ class Toma:
     plano: str
 
 
+PAUSA_DOBLE = 3            # frames con los ojos abiertos entre los dos parpadeos de uno doble (FR-043)
+ABIERTO, MEDIO, CERRADO = "abierto", "medio", "cerrado"
+_NOMBRE_FASE = (ABIERTO, MEDIO, CERRADO)
+
+
 @dataclass(frozen=True)
 class Parpadeo:
     f0: int
-    frames: int
+    frames: int                # duración de cada parpadeo (3 a 5)
+    doble: bool = False        # dos parpadeos seguidos, separados por PAUSA_DOBLE frames
+
+    @property
+    def span(self) -> int:
+        """Frames que ocupa el parpadeo completo (el doble cuenta los dos y la pausa)."""
+        return 2 * self.frames + PAUSA_DOBLE if self.doble else self.frames
+
+    def fases(self) -> List[int]:
+        """Fase de los ojos de cada frame del parpadeo: 0 abierto, 1 medio, 2 cerrado. Cada parpadeo va de
+        medio a cerrado y vuelve a medio (con 3 frames, un solo frame cerrado)."""
+        uno = [1] + [2] * (self.frames - 2) + [1] if self.frames >= 3 else [2] * self.frames
+        return uno + [0] * PAUSA_DOBLE + uno if self.doble else uno
 
 
 @dataclass
@@ -44,7 +61,7 @@ class LineaDeTiempo:
     parpadeos: List[Parpadeo] = field(default_factory=list)
     hablando: List[List[int]] = field(default_factory=list)   # [[f0, f1], ...]
     _visema_por_frame: Optional[np.ndarray] = field(default=None, init=False, repr=False, compare=False)
-    _parpadeo_por_frame: Optional[np.ndarray] = field(default=None, init=False, repr=False, compare=False)
+    _fase_por_frame: Optional[np.ndarray] = field(default=None, init=False, repr=False, compare=False)
 
     # ---- consultas ----
     def visema_en(self, frame: int) -> str:
@@ -59,13 +76,21 @@ class LineaDeTiempo:
         i = bisect.bisect_right([t.f0 for t in self.tomas], frame) - 1
         return self.tomas[max(i, 0)]
 
-    def parpadeando(self, frame: int) -> bool:
-        if self._parpadeo_por_frame is None:
-            arr = np.zeros(self.n_frames, dtype=bool)
+    def _fases(self) -> np.ndarray:
+        if self._fase_por_frame is None:
+            arr = np.zeros(self.n_frames, dtype=np.uint8)
             for p in self.parpadeos:
-                arr[p.f0:p.f0 + p.frames] = True
-            self._parpadeo_por_frame = arr
-        return bool(self._parpadeo_por_frame[frame])
+                f = p.fases()
+                arr[p.f0:p.f0 + len(f)] = f[:max(0, self.n_frames - p.f0)]
+            self._fase_por_frame = arr
+        return self._fase_por_frame
+
+    def fase_ojos(self, frame: int) -> str:
+        """«abierto», «medio» o «cerrado» en este frame."""
+        return _NOMBRE_FASE[int(self._fases()[frame])]
+
+    def parpadeando(self, frame: int) -> bool:
+        return bool(self._fases()[frame])
 
     # ---- validación de invariantes ----
     def validar(self) -> None:
@@ -97,7 +122,7 @@ class LineaDeTiempo:
                 raise ErrorAccionable(f"Las tomas no son crecientes (frames {a.f0} y {b.f0})",
                                       "Revisa las etiquetas del guion o las reglas del director")
         for p in self.parpadeos:
-            if not 3 <= p.frames <= 5 or p.f0 < 0 or p.f0 + p.frames > self.n_frames:
+            if not 3 <= p.frames <= 5 or p.f0 < 0 or p.f0 + p.span > self.n_frames:
                 raise ErrorAccionable(f"El parpadeo del frame {p.f0} no cumple 3 a 5 frames dentro del video",
                                       "Vuelve a generar los parpadeos con la semilla de la clase")
         for a, b in zip(self.parpadeos, self.parpadeos[1:]):

@@ -10,16 +10,19 @@ from src.biblioteca.importador import importar
 def _importar_poses(args) -> int:
     from src.biblioteca.calibraciones import importar_poses
     from src.errores import ErrorAccionable
-    bocas = {}
-    for par in args.bocas:
-        vista, _, carpeta = par.partition("=")
-        if not vista or not carpeta:
-            print(f"ERROR: «{par}» no tiene el formato VISTA=CARPETA. Qué hacer: por ejemplo "
-                  "--bocas tres_cuartos_der=C:\\ruta\\bocas", file=sys.stderr)
-            return 1
-        bocas[vista.strip()] = Path(carpeta.strip())
+    pares = {}
+    for opcion, lista in (("--bocas", args.bocas), ("--parpadeos", args.parpadeos)):
+        pares[opcion] = {}
+        for par in lista:
+            vista, _, carpeta = par.partition("=")
+            if not vista or not carpeta:
+                print(f"ERROR: «{par}» no tiene el formato VISTA=CARPETA. Qué hacer: por ejemplo "
+                      f"{opcion} tres_cuartos_der=C:\\ruta\\carpeta", file=sys.stderr)
+                return 1
+            pares[opcion][vista.strip()] = Path(carpeta.strip())
     try:
-        inf = importar_poses(args.origen, args.raiz, args.personaje, args.calibraciones, bocas)
+        inf = importar_poses(args.origen, args.raiz, args.personaje, args.calibraciones, pares["--bocas"],
+                             pares["--parpadeos"])
     except ErrorAccionable as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
@@ -48,6 +51,9 @@ def main(argv=None) -> int:
     ip.add_argument("--calibraciones", type=Path, help="JSON exportado por el calibrador de bocas")
     ip.add_argument("--bocas", action="append", default=[], metavar="VISTA=CARPETA",
                     help="Carpeta con las 9 bocas de una vista (repetible): tres_cuartos_der=ruta")
+    ip.add_argument("--parpadeos", action="append", default=[], metavar="VISTA=CARPETA",
+                    help="Carpeta con las imágenes de parpadeo de una vista (repetible); usa los recuadros del "
+                         "JSON del Editor de poses: frontal=ruta")
     ip.add_argument("--personaje", default="profesor")
     ip.add_argument("--raiz", type=Path, default=rutas.RAIZ, help="Raíz del proyecto (por defecto, esta carpeta)")
     args = p.parse_args(argv)

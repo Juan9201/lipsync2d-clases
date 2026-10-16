@@ -102,7 +102,7 @@ def construir():
             imagenes = {}
             for clave, ruta in (("cerrado", cfg["blink_cerrado"]), ("medio", cfg["blink_medio"])):
                 guardar(sobre_fondo(ruta), SALIDA / "blink" / vid / f"{clave}.jpg")
-                imagenes[clave] = {"archivo": f"blink/{vid}/{clave}.jpg", "centro": centro_de(ruta)}
+                imagenes[clave] = {"archivo": f"blink/{vid}/{clave}.jpg", "centro": centro_de(ruta), "original": ruta.name}
             vista["parpadeo"] = {"modo": "compartido", "imagenes": imagenes}
             print(f"{vid}: parpadeo compartido (cerrado y medio), caja de ojos {vista['caja_ref']}")
         elif "blink_por_pose" in cfg:                   # un parpadeo por pose
@@ -113,7 +113,7 @@ def construir():
                     print(f"  aviso: {f.stem} no tiene parpadeo")
                     continue
                 guardar(sobre_fondo(b), SALIDA / "blink" / vid / f"{f.stem}_cerrado.jpg")
-                imagenes[f.stem] = {"archivo": f"blink/{vid}/{f.stem}_cerrado.jpg", "centro": centro_de(b)}
+                imagenes[f.stem] = {"archivo": f"blink/{vid}/{f.stem}_cerrado.jpg", "centro": centro_de(b), "original": b.name}
             vista["parpadeo"] = {"modo": "por_pose", "imagenes": imagenes}
             print(f"{vid}: {len(imagenes)} parpadeos, uno por pose, caja de ojos {vista['caja_ref']}")
         datos["vistas"][vid] = vista

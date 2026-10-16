@@ -59,6 +59,17 @@ PLANOS_DEFECTO: Dict[str, Plano] = {
 
 
 @dataclass(frozen=True)
+class ParcheOjos:
+    """Parpadeo por imagen (FR-040, T100): un recorte pequeño de la pose con los ojos cerrados (y otro a medio
+    cerrar, si existe), con los bordes ya suavizados, que se pega sobre la pose abierta. (x, y) es la esquina
+    superior izquierda del parche en el lienzo de la pose."""
+    x: float
+    y: float
+    cerrado: Path
+    medio: Optional[Path] = None
+
+
+@dataclass(frozen=True)
 class Movimiento:
     """Respiración y movimiento leve: apagados por defecto (el usuario los descartó por poco
     naturales). Se pueden activar por pose en config.yaml."""
@@ -87,6 +98,7 @@ class Pose:
     formas: Optional[Dict[str, FormaBoca]] = None    # None = pose antigua con un solo ancla de boca
     pelo: Optional[Tuple[float, float]] = None       # centro de la cabeza (alineación en los cortes)
     parpadeo: bool = False
+    parche_ojos: Optional[ParcheOjos] = None         # imágenes de parpadeo importadas (None = la pose no parpadea)
 
 
 def espejo_de_forma(pose: "Pose", visema: str) -> bool:
@@ -165,6 +177,24 @@ def _formas(d: dict, id_pose: str, ruta: Path) -> Dict[str, FormaBoca]:
                             f"Revisa «formas» en {ruta}") from exc
 
 
+def _parche_ojos(d: dict, id_pose: str, carpeta: Path) -> Optional[ParcheOjos]:
+    pq = d.get("parpadeo")
+    if not isinstance(pq, dict):
+        return None
+    try:
+        x, y = float(pq["parche"]["x"]), float(pq["parche"]["y"])
+        cerrado = carpeta / str(pq["cerrado"])
+        medio = carpeta / str(pq["medio"]) if pq.get("medio") else None
+    except (KeyError, TypeError, ValueError) as exc:
+        raise AssetInvalido(f"El parpadeo de la pose {id_pose} es inválido en config.yaml (necesita parche.x, parche.y y cerrado)",
+                            "Vuelve a importar el parpadeo con `importar-poses --parpadeos`") from exc
+    for ruta in (cerrado, medio):
+        if ruta is not None and not ruta.is_file():
+            raise AssetInvalido(f"Falta la imagen de parpadeo {ruta.name} de la pose {id_pose}",
+                                "Vuelve a importar el parpadeo con `importar-poses --parpadeos`")
+    return ParcheOjos(x, y, cerrado, medio)
+
+
 def _cargar_pose_v3(carpeta: Path, d: dict, cfg_ruta: Path) -> Pose:
     id_carpeta, vista, gesto, variante = _id_pose_v3(carpeta)
     if d.get("id") != id_carpeta:
@@ -203,7 +233,8 @@ def _cargar_pose_v3(carpeta: Path, d: dict, cfg_ruta: Path) -> Pose:
                 d.get("bocas_de"), anclas, planos,
                 Movimiento(float(mov.get("respiracion_escala", 0.0)), float(mov.get("cabeza_px", 0.0))), carpeta,
                 False, d.get("ojos_de"), vista, gesto, tipo, variante, formas,
-                (float(pelo[0]), float(pelo[1])) if pelo else None, bool(d.get("parpadeo", False)))
+                (float(pelo[0]), float(pelo[1])) if pelo else None, bool(d.get("parpadeo", False)),
+                _parche_ojos(d, id_carpeta, carpeta))
 
 
 def _ancla(datos: dict, nombre: str, lienzo: Tuple[int, int], ruta: Path) -> Ancla:

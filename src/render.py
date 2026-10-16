@@ -142,7 +142,7 @@ def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
         semilla = semilla_de_clase(clase_id, p.semilla)
         mov = pose.movimiento            # en modo de respaldo ambas amplitudes son 0: solo parpadeo
         lt = LineaDeTiempo(FPS, len(frames), semilla, visemas, tomas,
-                           generar_parpadeos(len(frames), FPS, semilla),
+                           generar_parpadeos(len(frames), FPS, semilla, cortes=[t.f0 for t in tomas]),
                            calcular_hablando(visemas, len(frames)))
         lt.validar()
         anim = generar_animacion(lt.n_frames, FPS, semilla, lt.hablando, mov.respiracion_escala, mov.cabeza_px)
@@ -171,7 +171,8 @@ def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
                 decimo = max(1, lt.n_frames // 10)
                 for n in range(lt.n_frames):
                     ctx = ContextoFrame(n, n / FPS, (W, H), lt.toma_en(n), lt.visema_en(n), lt.parpadeando(n),
-                                        float(anim.escala[n]), float(anim.dx[n]), float(anim.dy[n]))
+                                        float(anim.escala[n]), float(anim.dx[n]), float(anim.dy[n]),
+                                        lt.fase_ojos(n))
                     enc.escribir(compositor.componer(ctx).tobytes())
                     if n % decimo == 0:
                         log.info("  %d %%", 100 * n // lt.n_frames)

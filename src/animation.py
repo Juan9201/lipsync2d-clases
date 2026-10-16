@@ -23,18 +23,48 @@ def _rng(semilla: int, flujo: int) -> np.random.Generator:
     return np.random.default_rng([int(semilla), flujo])
 
 
-def generar_parpadeos(n_frames: int, fps: int, semilla: int) -> List[Parpadeo]:
-    """Intervalos aleatorios de 2 a 6 s entre inicios; cada parpadeo dura 3 a 5 frames."""
-    rng = _rng(semilla, 1)
+PROB_DOBLE = 0.10                 # FR-043: probabilidad de que un parpadeo sea doble
+
+
+def _libre_de_cortes(f0: int, span: int, cortes: Sequence[int]) -> bool:
+    return not any(f0 <= c < f0 + span for c in cortes)
+
+
+def generar_parpadeos(n_frames: int, fps: int, semilla: int, prob_doble: float = PROB_DOBLE,
+                      cortes: Sequence[int] = ()) -> List[Parpadeo]:
+    """Intervalos aleatorios de 2 a 6 s entre inicios; cada parpadeo dura 3 a 5 frames y, con la probabilidad
+    `prob_doble`, es doble (FR-043). Ningún parpadeo ocupa el frame de un cambio de pose (`cortes`): si le toca, se
+    corre dentro del intervalo permitido al frame libre más cercano."""
+    rng, rng_doble = _rng(semilla, 1), _rng(semilla, 3)
     minimo, maximo = 2 * fps, 6 * fps
+    cortes = sorted(c for c in cortes if c > 0)
     parpadeos: List[Parpadeo] = []
+    previo = None
     f0 = int(rng.integers(minimo, maximo + 1))
     while True:
         duracion = int(rng.integers(3, 6))
-        if f0 + duracion > n_frames:
+        doble = bool(rng_doble.random() < prob_doble)
+        parp = Parpadeo(f0, duracion, doble)
+        if previo is None:
+            lo, hi = minimo, maximo
+        else:
+            lo, hi = previo + minimo, previo + maximo
+        if not _libre_de_cortes(f0, parp.span, cortes):
+            # frame libre más cercano que siga cumpliendo el intervalo (si los cortes son tan seguidos que no hay,
+            # se prefiere respetar el intervalo y se deja el parpadeo donde cayó)
+            for d in range(1, hi - lo + 1):
+                for cand in (f0 + d, f0 - d):
+                    if lo <= cand <= hi and _libre_de_cortes(cand, parp.span, cortes):
+                        parp = Parpadeo(cand, duracion, doble)
+                        break
+                else:
+                    continue
+                break
+        if parp.f0 + parp.span > n_frames:
             break
-        parpadeos.append(Parpadeo(f0, duracion))
-        f0 += int(rng.integers(minimo, maximo + 1))
+        parpadeos.append(parp)
+        previo = parp.f0
+        f0 = parp.f0 + int(rng.integers(minimo, maximo + 1))
     return parpadeos
 
 

@@ -167,6 +167,9 @@ Cada historia se puede probar por separado.
   (`<pose>_parpadeo.png`, imagen completa de la pose con los ojos cerrados); el resto de la
   cabeza se conserva idéntico para que no haya parpadeo de otras partes. Si la pose no tiene
   esa imagen, usa el parche de ojos cerrados de otra pose (`ojos_de`).
+  **(v3.1, 2026-10-16)** Se importa como un recorte con borde suave (`parpadeo_cerrado.png` y, en las frontales,
+  `parpadeo_medio.png`) por pose: las frontales comparten un solo juego de imágenes (la cabeza casi no cambia);
+  cada 3/4 trae el suyo. El recuadro de los ojos se fija por pose en el Editor de poses.
 - **FR-041:** El sistema DEBE poder aplicar una "respiración" (escala del cuerpo de ±0.5 %
   con una onda lenta) cuando la pose lo active en su configuración. **Desactivada por
   defecto** (el usuario la descartó el 2026-10-14 por poco natural).
@@ -574,3 +577,5 @@ Sin marcadores `[NEEDS CLARIFICATION]` pendientes.
 | 2026-10-13 | v2: modelo estudio (poses, escenarios, plano como cámara virtual), director automático (US9, FR-090 a FR-094), producción en lote (US10, FR-100 a FR-107), FR-033, NFR-007 a NFR-009, SC-004 y SC-005, equipo de referencia. Se eliminan el eje ángulo y la nomenclatura E·P·A·PL. | Decisiones del usuario sobre el flujo de producción masiva. |
 | 2026-10-15 | v3 (borrador): añadidos US11 a US13, FR-043 a FR-046, FR-057 a FR-059, FR-067, FR-095 y FR-096, SC-007; modificados FR-040, FR-050, FR-051, FR-062 y la nomenclatura de pose (sección 4); casos borde, fuera de alcance, clarificaciones y supuestos actualizados. | Pruebas reales con el usuario: fondo en video, vistas 3/4 con reflejo, gestos, calibración por forma y naturalidad. |
 | 2026-10-15 | Spec v3 aprobada por el usuario con sus supuestos (alineación de cabezas por el pelo, mezcla de 2 frames entre variantes de reposo, intervalos de naturalidad por defecto, una sola variante de reposo 3/4 por ahora). Siguiente paso: añadir las tareas de la v3 a `tasks.md`. | Aprobación del usuario. |
+| 2026-10-16 | v3.1: el parpadeo por imagen pasa a ser un recorte con borde suave por pose (frontales comparten un juego de cerrado y medio; cada 3/4 trae el suyo); parpadeo doble con probabilidad configurable (10 %) y nunca en un cambio de pose (FR-043); calibración de bocas y recuadros de ojos en el Editor de poses. | Aprobado por el usuario en el chat (puntos 1–3 de la propuesta de organización de bocas y parpadeos). |
+| 2026-10-16 | PROPUESTO (pendiente de aprobación): FR-061 se relaja para las poses con calibración por forma; sus bocas pueden medir distinto porque cada forma lleva su propia escala. | Implementado en T093–T096; falta tu OK. |

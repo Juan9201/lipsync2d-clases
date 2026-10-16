@@ -99,6 +99,8 @@
       <div class="fila"><label class="t">Borde suave</label><input type="range" id="blur" min="0" max="30" step="1" value="10"><span id="blurN" class="nota">10 px</span></div>
       <div class="fila"><label class="t">Recuadro (ancho, alto)</label>
         <input type="number" id="cw" step="2" title="ancho"> <input type="number" id="ch" step="2" title="alto"> <button id="tamTodas" title="Pone este ancho y alto en el recuadro de todas las poses de la vista">igualar todas</button></div>
+      <div class="fila"><button id="soloLentes" title="Baja el borde de arriba y sube el de abajo en TODAS las poses de esta vista: el parche deja de tocar las cejas">Recuadro solo en los lentes (sin cejas)</button>
+        <button id="recuadroAncho" title="Deshace el anterior">Volver al ancho</button></div>
       <div class="nota" id="notaOjos"></div>
       <div class="nota">«Parche» = de dónde se toman los ojos de la imagen de parpadeo; «recuadro» = dónde se pegan en la pose. El parpadeo de esta vista se muestra pegando solo el recuadro sobre la pose abierta.</div>
     </div>
@@ -226,6 +228,11 @@ $("modoMover").onchange = e => { mover = e.target.value; dibujar(); };
 const tamCaja = () => cajaDe(pose).slice(2);
 ["cw", "ch"].forEach((id, k) => $(id).addEventListener("input", e => { const x = parseFloat(e.target.value); if (isNaN(x) || x <= 10) return;
   const c = cajaDe(pose).slice(), cen = [c[0] + c[2] / 2, c[1] + c[3] / 2]; c[2 + k] = x; c[0] = cen[0] - c[2] / 2; c[1] = cen[1] - c[3] / 2; ajuste.caja[pose.nombre] = c; dibujar(); }));
+function ajustaVerticales(dy, dh) {          // mueve el borde de arriba y de abajo de todos los recuadros de la vista
+  POSES().forEach(p => { const c = cajaDe(p); ajuste.caja[p.nombre] = [c[0], c[1] + dy, c[2], Math.max(20, c[3] + dh)]; }); dibujar();
+}
+$("soloLentes").onclick = () => { ajustaVerticales(88, -126); $("estado").textContent = "Recuadros ajustados a los lentes ✓"; $("estado").className = "nota ok"; };
+$("recuadroAncho").onclick = () => { ajustaVerticales(-88, 126); $("estado").textContent = "Recuadros anchos de nuevo ✓"; $("estado").className = "nota ok"; };
 $("tamTodas").onclick = () => { const [w, h] = tamCaja(); POSES().forEach(p => { const c = cajaDe(p), cen = [c[0] + c[2] / 2, c[1] + c[3] / 2]; ajuste.caja[p.nombre] = [cen[0] - w / 2, cen[1] - h / 2, w, h]; }); dibujar(); $("estado").textContent = "Tamaño copiado a todas las poses ✓"; $("estado").className = "nota ok"; };
 $("animaOjos").onclick = () => {
   if (animandoOjos) { clearInterval(animandoOjos); animandoOjos = null; ojos = "abiertos"; $("animaOjos").textContent = "▶ Parpadear"; dibujar(); return; }
@@ -381,7 +388,7 @@ function salidaVista() {
   const P = V().parpadeo;
   if (P) {
     o.parpadeo = { modo: P.modo, borde_suave_px: +$("blur").value, imagenes: {}, cajas: {} };
-    Object.keys(P.imagenes).forEach(k => { const id = P.modo + ":" + k, d = despFuente(id); o.parpadeo.imagenes[k] = { archivo: P.imagenes[k].archivo.split("/").pop(), centro: P.imagenes[k].centro, desp: [Math.round(d[0]), Math.round(d[1])] }; });
+    Object.keys(P.imagenes).forEach(k => { const id = P.modo + ":" + k, d = despFuente(id); o.parpadeo.imagenes[k] = { archivo: P.imagenes[k].archivo.split("/").pop(), original: P.imagenes[k].original, centro: P.imagenes[k].centro, desp: [Math.round(d[0]), Math.round(d[1])] }; });
     POSES().forEach(p => { o.parpadeo.cajas[p.nombre] = cajaDe(p).map(Math.round); });
   }
   return JSON.stringify(o, null, 1);

@@ -163,14 +163,36 @@ class BocaLayer(_SpriteLayer):
 
 
 class OjosLayer(_SpriteLayer):
+    """Parpadeo. Poses antiguas: parche de ojos cerrados con ancla. Poses de la v3: el recorte de parpadeo
+    importado (T100), pegado en el mismo sitio de la pose; con «medio» usa la imagen intermedia si existe y, si
+    no, la de ojos cerrados. Una pose v3 sin parpadeo importado no parpadea."""
+
     def __init__(self, pose, proveedor, ventana, salida, desplazamiento=(0.0, 0.0)):
         super().__init__(pose, proveedor, ventana, salida, desplazamiento)
+        self._parche = pose.parche_ojos
+        if pose.formas is not None:
+            self._ojos = None
+            self._imgs = {}
+            if self._parche is not None:
+                self._imgs["cerrado"] = Image.open(self._parche.cerrado).convert("RGBA")
+                self._imgs["medio"] = (Image.open(self._parche.medio).convert("RGBA")
+                                       if self._parche.medio is not None else self._imgs["cerrado"])
+            return
         ruta = carpeta_fuente_ojos(pose) / "ojos_cerrados.png"
-        # Las poses de la v3 parpadean con una imagen propia (T100), no con este parche: sin parche, sin parpadeo
-        self._ojos = Image.open(ruta).convert("RGBA") if ruta.is_file() or pose.formas is None else None
+        self._ojos = Image.open(ruta).convert("RGBA") if ruta.is_file() else None
 
     def renderizar(self, ctx: ContextoFrame) -> Optional[CapaRGBA]:
-        if not ctx.parpadeando or self._ojos is None:
+        fase = ctx.ojos
+        if fase == "abierto":
+            return None
+        if self._pose.formas is not None:                            # v3: recorte de parpadeo ya posicionado
+            original = self._imgs.get(fase)
+            if original is None:
+                return None
+            clave = "parche" + fase
+            img = self._sprite(clave, original, original.width, 0.0, ctx.escala)
+            return self._colocar(img, self._parche.x + original.width / 2, self._parche.y + original.height / 2, ctx)
+        if self._ojos is None:
             return None
         a = self._prov.anclas(ctx.n_frame, self._pose.id).ojos
         img = self._sprite("ojos", self._ojos, a.ancho, a.angulo, ctx.escala)
