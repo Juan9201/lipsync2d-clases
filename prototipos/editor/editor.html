@@ -45,6 +45,7 @@
 <body>
 <header>
   <h1>Editor de poses · bocas y parpadeo</h1>
+  <span id="guardado" style="font-weight:700">…</span>
   <span>Arrastra sobre la cara para mover · flechas 1 px (Shift 5) · A–H, X eligen la forma · [ ] giran · 1 2 3 ojos abiertos/medio/cerrado · M alterna boca/ojos · Re Pág / Av Pág cambian de pose</span>
 </header>
 <main>
@@ -276,6 +277,7 @@ function sincronizar() {
   try { localStorage.setItem("ed_" + clave(), JSON.stringify(est)); } catch (e) {}
   pintaEstado();
   if (document.activeElement !== $("json")) $("json").value = salidaVista();
+  programaGuardado();
 }
 function pintaEstado() {
   const e = estadoDe[pose.nombre], el = $("estadoPose");
@@ -403,9 +405,37 @@ $("cargar").onclick = () => {
   } catch (e) { $("estado").textContent = "JSON no válido"; $("estado").className = "nota"; }
 };
 
+// ---------- guardado en disco (lo hace servidor_editor.py) ----------
+let tGuardar = null, servidorOk = null;
+function estadoSerializable() { return { version: 1, memoria, lado, estadoDe, ajuste, blur: +$("blur").value, vista: vistaId, pose: pose && pose.nombre }; }
+async function guardarEnDisco() {
+  const g = $("guardado"); if (!pose) return;
+  try {
+    const envia = (n, c) => fetch("/guardar/" + n, { method: "POST", body: c }).then(r => { if (!r.ok) throw new Error(r.status); });
+    await envia("calibracion_" + vistaId + ".json", salidaVista());
+    await envia("estado_completo.json", JSON.stringify(estadoSerializable()));
+    servidorOk = true; g.textContent = "Guardado en disco ✓ " + new Date().toLocaleTimeString(); g.style.color = "var(--ok)";
+  } catch (e) {
+    servidorOk = false; g.textContent = "⚠ NO se guarda en disco: abre el editor con servidor_editor.py"; g.style.color = "var(--pend)";
+  }
+}
+function programaGuardado() { clearTimeout(tGuardar); tGuardar = setTimeout(guardarEnDisco, 1200); }
+window.addEventListener("beforeunload", e => { if (tGuardar) { clearTimeout(tGuardar); guardarEnDisco(); } });
+async function restaurarDeDisco() {
+  try {
+    const r = await fetch("/editor/calibraciones/estado_completo.json", { cache: "no-store" }); if (!r.ok) return false;
+    const e = await r.json();
+    Object.assign(memoria, e.memoria || {}); Object.assign(lado, e.lado || {}); Object.assign(estadoDe, e.estadoDe || {});
+    Object.assign(ajuste.fuente, (e.ajuste || {}).fuente || {}); Object.assign(ajuste.caja, (e.ajuste || {}).caja || {});
+    if (e.blur != null) { $("blur").value = e.blur; $("blurN").textContent = e.blur + " px"; }
+    if (e.vista && DATOS.vistas[e.vista]) vistaId = e.vista;
+    window._poseInicial = e.pose; $("guardado").textContent = "Restaurado de disco ✓"; $("guardado").style.color = "var(--ok)"; return true;
+  } catch (err) { return false; }
+}
+
 // ---------- arranque ----------
 cargarPrecarga(); iniciarEstados();
-cambiaVista(vistaId);
+restaurarDeDisco().then(() => cambiaVista(vistaId, window._poseInicial));
 </script>
 </body>
 </html>

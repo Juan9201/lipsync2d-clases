@@ -88,6 +88,21 @@ def _resolver_claves(cal: Dict[str, dict], ids: List[str], juego: Optional[str],
     return resueltas
 
 
+def _calibracion_existente(carpeta: Path) -> Optional[dict]:
+    """La calibración que la pose ya tiene en el proyecto (o None si nunca se calibró)."""
+    from src.biblioteca.modelos import cargar_pose
+    if not (carpeta / "config.yaml").is_file():
+        return None
+    try:
+        pose = cargar_pose(carpeta)
+    except AssetInvalido:
+        return None
+    if not pose.formas:
+        return None
+    return {"espejo": bool(pose.espejo),
+            "formas": {v: {"x": f.x, "y": f.y, "s": f.s, "r": f.r, "m": f.m} for v, f in pose.formas.items()}}
+
+
 def _sprites_de_vista(carpeta: Path) -> Dict[str, Path]:
     encontrados: Dict[str, Path] = {}
     for v in VISEMAS:
@@ -192,7 +207,7 @@ def importar_poses(origen: Union[Path, Sequence[Path]], raiz: Path, personaje: s
             shutil.copyfile(ruta, cuerpo)
         with Image.open(cuerpo) as im:
             lienzo, pelo = im.size, centro_cabeza(im)
-        c = cal.get(pose_id)
+        c = cal.get(pose_id) or _calibracion_existente(carpeta)       # sin archivo nuevo, no se borra lo ya calibrado
         if c is None:
             informe.avisos.append(f"{pose_id}: sin calibración de bocas; calíbrala con el calibrador "
                                   "(Calibrador4) y vuelve a importar")

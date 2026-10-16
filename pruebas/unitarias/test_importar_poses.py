@@ -267,3 +267,16 @@ def test_acepta_el_json_del_editor_de_poses_con_estado_y_parpadeo(proyecto_tmp, 
     inf = _importar(proyecto_tmp, origen, ruta, {VISTA: _bocas(proyecto_tmp / "b")})
     assert not [a for a in inf.avisos if "sin calibración" in a and ("neutro_01" in a or "explicar_01" in a)]
     assert cargar_pose(proyecto_tmp / "personajes" / "profe" / "poses" / f"{VISTA}_explicar_01").espejo is True
+
+
+# ---------------- reimportar sin calibración NO borra lo ya calibrado ----------------
+def test_reimportar_una_pose_sin_calibracion_conserva_la_que_ya_tenia(proyecto_tmp, origen):
+    cal = _calibracion(proyecto_tmp, {f"{VISTA}_neutro_01": {"espejo": True, "formas": _formas()}})
+    _importar(proyecto_tmp, origen, cal, {VISTA: _bocas(proyecto_tmp / "b")})
+    poses = proyecto_tmp / "personajes" / "profe" / "poses"
+    antes = cargar_pose(poses / f"{VISTA}_neutro_01")
+    inf = _importar(proyecto_tmp, origen)                    # segunda importación: sin archivo de calibración
+    despues = cargar_pose(poses / f"{VISTA}_neutro_01")
+    assert despues.espejo is True and despues.formas == antes.formas
+    assert not [a for a in inf.avisos if "neutro_01" in a and "sin calibración" in a]
+    assert any("explicar_01" in a and "sin calibración" in a for a in inf.avisos)    # la que nunca tuvo, sí avisa

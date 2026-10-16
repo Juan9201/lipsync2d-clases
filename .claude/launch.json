@@ -75,13 +75,8 @@
       "name": "editor-poses",
       "runtimeExecutable": "python",
       "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8770",
-        "--bind",
-        "127.0.0.1",
-        "--directory",
-        "prototipos"
+        "prototipos/editor/servidor_editor.py",
+        "8770"
       ],
       "port": 8770
     }
