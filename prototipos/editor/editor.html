@@ -132,7 +132,7 @@ const POSES = () => V().poses;
 const clave = () => pose.nombre + "|" + ($("espejo").checked ? "esp" : "dir");
 
 function cargaImg(src) {
-  if (!cacheImg[src]) { const i = new Image(); i.onload = () => { i.listo = true; dibujar(); rejilla(); }; i.src = src; cacheImg[src] = i; }
+  if (!cacheImg[src]) { const i = new Image(); i.onload = () => { i.listo = true; dibujar(); rejilla(); }; i.src = src + "?v=" + Date.now(); cacheImg[src] = i; }
   return cacheImg[src];
 }
 
