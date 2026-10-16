@@ -26,6 +26,7 @@ class Toma:
     escenario: str
     pose: str
     plano: str
+    mezcla: int = 0            # frames de mezcla con la toma anterior al empezar (cambio de pose, FR-044); 0 = corte seco
 
 
 PAUSA_DOBLE = 3            # frames con los ojos abiertos entre los dos parpadeos de uno doble (FR-043)
@@ -91,6 +92,18 @@ class LineaDeTiempo:
 
     def parpadeando(self, frame: int) -> bool:
         return bool(self._fases()[frame])
+
+    def mezcla_en(self, frame: int):
+        """(toma anterior, opacidad de la toma actual) en los primeros `mezcla` frames de una toma; si no hay
+        mezcla, (None, 1.0). Con 2 frames de mezcla la toma nueva entra a 1/3 y 2/3 de opacidad."""
+        i = bisect.bisect_right([t.f0 for t in self.tomas], frame) - 1
+        if i <= 0:
+            return None, 1.0
+        t = self.tomas[i]
+        k = frame - t.f0
+        if k < t.mezcla:
+            return self.tomas[i - 1], (k + 1) / (t.mezcla + 1)
+        return None, 1.0
 
     # ---- validación de invariantes ----
     def validar(self) -> None:

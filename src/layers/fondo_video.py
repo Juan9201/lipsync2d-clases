@@ -11,7 +11,7 @@ import json
 import logging
 import subprocess
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from PIL import Image
 
@@ -113,7 +113,8 @@ class FondoVideoLayer:
 
     def __init__(self, ruta_video: Path, ventana: Ventana, lienzo: Tuple[int, int], salida: Tuple[int, int],
                  fps: int = 25, fundido_s: float = FUNDIDO_DEFECTO_S, desenfoque: float = 0.0,
-                 cache_dir: Optional[Path] = None):
+                 cache_dir: Optional[Path] = None, ventanas: Optional[Dict[str, Ventana]] = None,
+                 desenfoques: Optional[Dict[str, float]] = None):
         self._salida = salida
         self._fps = fps
         self._desenfoque = desenfoque
@@ -123,10 +124,16 @@ class FondoVideoLayer:
         self.frames_por_ciclo = preparar_bucle(ruta_video, self._unidad, fps, fundido_s)
         info = _sondear(self._unidad)
         sx, sy = info["ancho"] / lienzo[0], info["alto"] / lienzo[1]      # píxeles de video por píxel de lienzo
-        self._filtro = (f"crop={ventana.w * sx:.2f}:{ventana.h * sy:.2f}:{ventana.x0 * sx:.2f}:{ventana.y0 * sy:.2f},"
-                        f"scale={salida[0]}:{salida[1]}:flags=lanczos")
-        if desenfoque > 0:
-            self._filtro += f",gblur=sigma={desenfoque}"
+
+        def filtro(v: Ventana, difuminado: float) -> str:
+            f = (f"crop={v.w * sx:.2f}:{v.h * sy:.2f}:{v.x0 * sx:.2f}:{v.y0 * sy:.2f},"
+                 f"scale={salida[0]}:{salida[1]}:flags=lanczos")
+            return f + (f",gblur=sigma={difuminado}" if difuminado > 0 else "")
+
+        self._filtro = filtro(ventana, desenfoque)
+        # con varios planos, un filtro por plano: al cambiar de plano se reabre el decodificador en el frame actual
+        self._filtros = {pl: filtro(v, (desenfoques or {}).get(pl, 0.0)) for pl, v in (ventanas or {}).items()}
+        self._filtro_defecto = self._filtro
         self._bytes = salida[0] * salida[1] * 3
         self._proceso: Optional[subprocess.Popen] = None
         self._proximo = 0                  # índice del próximo frame que saldrá del decodificador
@@ -161,6 +168,12 @@ class FondoVideoLayer:
     # ---- BaseLayer ----
     def renderizar(self, ctx: ContextoFrame) -> Optional[CapaRGBA]:
         n = ctx.n_frame
+        if self._filtros:
+            plano = ctx.toma.plano if ctx.toma is not None else None
+            nuevo = self._filtros.get(plano, self._filtro_defecto)
+            if nuevo != self._filtro:
+                self.cerrar()
+                self._filtro, self._ultimo, self._ultimo_n = nuevo, None, -1
         if n == self._ultimo_n and self._ultimo is not None:
             return self._ultimo
         if self._proceso is None or n != self._proximo:

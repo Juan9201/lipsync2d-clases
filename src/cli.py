@@ -27,8 +27,14 @@ def construir_parser() -> argparse.ArgumentParser:
     p.add_argument("--pose", help="Pose a usar (por defecto, la primera)")
     p.add_argument("--escenario", help="Escenario a usar (por defecto, el primero)")
     p.add_argument("--reconocedor", choices=("phonetic", "pocketSphinx"), default="phonetic")
-    p.add_argument("--plano", choices=("PL1", "PL2", "PL3", "PL4", "PL5", "PL6"), default="PL1",
-                   help="Plano de la cámara virtual (PL1 entero ... PL6 primerísimo primer plano)")
+    p.add_argument("--plano", choices=("PL1", "PL2", "PL3", "PL4", "PL5", "PL6"),
+                   help="Plano de la cámara virtual (PL1 entero ... PL6 primerísimo primer plano); con director es "
+                        "el plano inicial y sin director es el plano fijo (por defecto PL1)")
+    p.add_argument("--director", action=argparse.BooleanOptionalAction, default=True,
+                   help="El director elige poses, planos y cortes (por defecto sí); --no-director deja un plano y una "
+                        "pose fijos o el ciclo provisional de --poses")
+    p.add_argument("--reglas", type=Path,
+                   help="Archivo de reglas del director (por defecto reglas_director.yaml del proyecto, si existe)")
     p.add_argument("--poses", help="Poses <vista>_<gesto>_<NN> separadas por comas (se recorren en ciclo), "
                                    "o «todas» para usar todas las de la carpeta del personaje")
     p.add_argument("--duracion-toma", type=float, default=25.0,
@@ -45,8 +51,11 @@ def resolver_poses(texto: Optional[str], raiz: Path, personaje: str) -> Optional
     if texto.strip().lower() == "todas":
         carpeta = Path(raiz) / "personajes" / personaje / "poses"
         # solo las poses con la nomenclatura <vista>_<gesto>_<NN> (las P1, P2... antiguas tienen otro lienzo)
-        return sorted(d.name for d in carpeta.iterdir()
-                      if d.is_dir() and not re.match(r"^P\d+(_|$)", d.name)) if carpeta.is_dir() else []
+        todas = sorted(d.name for d in carpeta.iterdir()
+                       if d.is_dir() and not re.match(r"^P\d+(_|$)", d.name)) if carpeta.is_dir() else []
+        # la primera es la pose de referencia (cabeza y encuadre): mejor una neutra que un gesto de acento
+        neutra = next((n for n in todas if n == "frontal_neutro_01"), next((n for n in todas if n.endswith("_neutro_01")), None))
+        return ([neutra] + [n for n in todas if n != neutra]) if neutra else todas
     return [t.strip() for t in texto.split(",") if t.strip()]
 
 
@@ -88,7 +97,8 @@ def main(argv: Optional[List[str]] = None, raiz: Path = rutas.RAIZ) -> int:
         final = renderizar(ParametrosRender(
             personaje=args.personaje, audio=audio, guion=args.guion, pose=args.pose,
             escenario=args.escenario, resolucion=(ancho, alto), semilla=args.seed,
-            reconocedor=args.reconocedor, plano=args.plano,
+            reconocedor=args.reconocedor, plano=args.plano or "PL1", plano_inicial=args.plano,
+            director=args.director, reglas=args.reglas,
             poses=resolver_poses(args.poses, raiz, args.personaje), alinear=not args.sin_alinear,
             duracion_toma_s=args.duracion_toma), raiz=raiz)
     except ErrorAccionable as exc:

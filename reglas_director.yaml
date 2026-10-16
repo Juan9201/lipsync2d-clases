@@ -1,0 +1,26 @@
+# Reglas del director automático (FR-090 a FR-094, FR-044 a FR-046).
+# Todo lo que NO escribas aquí usa el valor por defecto. Para empezar, deja este archivo como está y cambia solo lo que quieras.
+# Cada corte cambia UN solo elemento: el plano de la cámara, la pose o un acento. Los cortes caen en una pausa de la voz.
+
+toma_s: [6, 20]            # segundos entre un corte y el siguiente (mínimo, máximo)
+tolerancia_pausa_s: 2      # cuánto puede moverse un corte para caer en una pausa de la voz
+
+cambio:
+  prob_plano: 0.5          # probabilidad de que un corte sea solo un cambio de plano (misma pose, corte seco). 0 = nunca
+
+planos:                    # cámara virtual: PL1 cuerpo entero ... PL6 primerísimo primer plano
+  permitidos: [PL2, PL3, PL4, PL5]
+  inicial: PL3
+  paso_maximo: 1           # el plano cambia de a un paso (PL3 -> PL4, nunca PL2 -> PL5)
+  pesos: {PL2: 1.0, PL3: 3.0, PL4: 3.0, PL5: 1.5}    # cuánto se prefiere cada plano
+  evitar_volver: 0.3       # 0 a 1: peso de volver al plano anterior (1 = sin preferencia; evita vaivenes PL3-PL4-PL3-PL4)
+
+reposo:
+  activo: true
+  mezcla_frames: 2         # frames de mezcla al cambiar de pose. 0 = corte seco
+
+acentos:                   # gestos breves (pulgar, señalar, bienvenida, contar) que vuelven solos al reposo
+  activo: true
+  probabilidad: 0.5        # probabilidad de que un cambio de pose sea un acento
+  duracion_s: [3, 6]
+  separacion_min_s: 20     # como mínimo, tantos segundos entre dos acentos

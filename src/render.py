@@ -13,7 +13,9 @@ from src import rutas
 from src.audio import convertir_para_analisis, info_audio
 from src.biblioteca.validacion import validar_escenario, validar_pose
 from src.animation import calcular_hablando, generar_animacion, generar_parpadeos
+from src.biblioteca.modelos import cargar_escenario
 from src.compositor import Compositor
+from src.director import cargar_reglas, dirigir
 from src.encoder import Codificador
 from src.errores import AssetInvalido
 from src.guion import limpiar_para_analisis
@@ -44,7 +46,11 @@ class ParametrosRender:
     # --- v3: varias poses con la cabeza alineada ---
     poses: Optional[Sequence[str]] = None   # ids de pose (<vista>_<gesto>_<NN>); se recorren en ciclo
     alinear: bool = True               # FR-059: llevar la cabeza de cada pose al sitio de la primera
-    duracion_toma_s: float = 25.0      # cada cuánto cambia de pose (provisional hasta el director)
+    duracion_toma_s: float = 25.0      # cada cuánto cambia de pose (solo sin director)
+    # --- director automático (FR-090): elige poses, planos de la cámara virtual y momentos de corte ---
+    director: bool = False
+    reglas: Optional[Path] = None      # archivo de reglas (por defecto, reglas_director.yaml del proyecto si existe)
+    plano_inicial: Optional[str] = None
 
 
 def _buscar_carpeta(base: Path, prefijo: str, id_pedido: Optional[str]) -> Optional[Path]:
@@ -113,6 +119,7 @@ def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
                                     "`python -m src.biblioteca importar`")
             ruta_fondo = validar_escenario(carpeta_esc, (W, H))
         info = info_audio(audio)
+    usar_director = p.director and not pose.respaldo
 
     texto = ""
     if p.guion is not None and Path(p.guion).is_file():
@@ -132,14 +139,21 @@ def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
     with etapa(log, "linea_de_tiempo"):
         escenario_id = "E?" if ruta_fondo is None else carpeta_esc.name.split("_")[0]
         visemas = _a_visemas(frames)
-        if len(poses_clase) > 1:
+        semilla = semilla_de_clase(clase_id, p.semilla)
+        if usar_director:
+            ruta_reglas = p.reglas or (raiz / "reglas_director.yaml" if (raiz / "reglas_director.yaml").is_file() else None)
+            admite = cargar_escenario(carpeta_esc).admite if ruta_fondo is not None else None
+            tomas = dirigir(list(poses_clase.values()), visemas, len(frames), FPS, escenario_id, semilla,
+                            cargar_reglas(ruta_reglas), admite, p.plano_inicial, registro=log.info)
+            log.info("Director: %d tomas, planos %s, poses %d", len(tomas), "/".join(sorted({t.plano for t in tomas})),
+                     len({t.pose for t in tomas}))
+        elif len(poses_clase) > 1:
             # Provisional hasta el director (T070): recorre las poses y corta en pausas de la voz
             tomas = tomas_ciclicas(list(poses_clase), visemas, len(frames), FPS, escenario_id, p.plano,
                                    p.duracion_toma_s)
             log.info("Poses de la clase: %d tomas con %d poses", len(tomas), len(poses_clase))
         else:
             tomas = [Toma(0, escenario_id, pose.id, p.plano)]
-        semilla = semilla_de_clase(clase_id, p.semilla)
         mov = pose.movimiento            # en modo de respaldo ambas amplitudes son 0: solo parpadeo
         lt = LineaDeTiempo(FPS, len(frames), semilla, visemas, tomas,
                            generar_parpadeos(len(frames), FPS, semilla, cortes=[t.f0 for t in tomas]),
@@ -150,14 +164,21 @@ def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
     fondo = None
     try:
         with etapa(log, "capas"):
-            ventana = ventana_plano(pose, p.plano)
+            plano_base = lt.tomas[0].plano
+            ventana = ventana_plano(pose, plano_base)
+            # con director, una ventana por plano usado: la cámara virtual cambia de plano en cada toma
+            planos = sorted({t.plano for t in lt.tomas}) if usar_director else []
+            ventanas = {pl: ventana_plano(pose, pl) for pl in planos} or None
+            desenfoques = {pl: pose.planos[pl].desenfoque for pl in planos} or None
             if ruta_fondo is not None and Path(ruta_fondo).suffix.lower() == ".mp4":
                 fondo = FondoVideoLayer(ruta_fondo, ventana, pose.lienzo, (W, H), FPS,
-                                        desenfoque=pose.planos[p.plano].desenfoque, cache_dir=raiz / "cache")
+                                        desenfoque=pose.planos[plano_base].desenfoque, cache_dir=raiz / "cache",
+                                        ventanas=ventanas, desenfoques=desenfoques)
             else:
-                fondo = FondoLayer(ruta_fondo, ventana, pose.lienzo, (W, H), pose.planos[p.plano].desenfoque)
-            if pose.formas is not None or len(poses_clase) > 1:
-                personaje = [PersonajeLayer(poses_clase, ventana, (W, H), alinear=p.alinear)]
+                fondo = FondoLayer(ruta_fondo, ventana, pose.lienzo, (W, H), pose.planos[plano_base].desenfoque,
+                                   ventanas, desenfoques)
+            if pose.formas is not None or len(poses_clase) > 1 or usar_director:
+                personaje = [PersonajeLayer(poses_clase, ventanas or ventana, (W, H), alinear=p.alinear)]
             else:
                 anclas = AnclasEstaticas(pose)
                 personaje = [CuerpoLayer(pose, ventana, (W, H)),
@@ -170,9 +191,10 @@ def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
             with Codificador(final, audio, W, H, FPS, duracion_esperada_s=info.duracion_s) as enc:
                 decimo = max(1, lt.n_frames // 10)
                 for n in range(lt.n_frames):
+                    previa, mezcla = lt.mezcla_en(n)
                     ctx = ContextoFrame(n, n / FPS, (W, H), lt.toma_en(n), lt.visema_en(n), lt.parpadeando(n),
                                         float(anim.escala[n]), float(anim.dx[n]), float(anim.dy[n]),
-                                        lt.fase_ojos(n))
+                                        lt.fase_ojos(n), previa, mezcla)
                     enc.escribir(compositor.componer(ctx).tobytes())
                     if n % decimo == 0:
                         log.info("  %d %%", 100 * n // lt.n_frames)

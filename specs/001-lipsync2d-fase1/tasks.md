@@ -123,10 +123,10 @@ confirmes el checkpoint del MVP.**
 - **Checkpoint US4:** con 2 poses y 2 escenarios, un guion con `[toma:…]` cambia en una pausa cercana; una etiqueta mal escrita falla antes de renderizar.
 
 ## Fase 7: US9 (P2) — director automático
-- [ ] T068 [P] [US9] Tests del director (duración mínima, no repetir pose, paso de plano, variedad, restricciones de escenario, prioridad de etiquetas, misma semilla = mismas tomas) — `pruebas/unitarias/test_director.py` — FR-090, FR-091, FR-092, FR-093
-- [ ] T069 [P] [US9] Test de `reglas_director.yaml` (cambiar un valor cambia el comportamiento) — `pruebas/unitarias/test_reglas_director.py` — FR-094
-- [ ] T070 [US9] `src/director.py` y `reglas_director.yaml` con valores por defecto — `src/director.py` — FR-090–FR-094
-- [ ] T071 [US9] Integrar el director en `render` (completa lo que las etiquetas no fijan) — `src/render.py` — FR-090, FR-091
+- [ ] T068 [P] [US9] Tests del director (duración mínima, no repetir pose, paso de plano, variedad, restricciones de escenario, prioridad de etiquetas, misma semilla = mismas tomas) — `pruebas/unitarias/test_director.py` — FR-090, FR-091, FR-092, FR-093 **(parcial 2026-10-16: hecho sin etiquetas; falta la prioridad de etiquetas manuales, T061–T064)**
+- [x] T069 [P] [US9] Test de `reglas_director.yaml` (cambiar un valor cambia el comportamiento) — `pruebas/unitarias/test_reglas_director.py` — FR-094
+- [x] T070 [US9] `src/director.py` y `reglas_director.yaml` con valores por defecto — `src/director.py` — FR-090–FR-094
+- [ ] T071 [US9] Integrar el director en `render` (completa lo que las etiquetas no fijan) — `src/render.py` — FR-090, FR-091 **(parcial 2026-10-16: hecho sin etiquetas; falta la prioridad de etiquetas manuales, T061–T064)**
 - **Checkpoint US9:** un guion sin etiquetas produce un video con tomas variadas y reproducibles con `--seed`.
 
 ## Fase 8: US5 (P2) — calibración y previsualización
@@ -180,8 +180,8 @@ reordenarse si lo pides; US10 conviene antes de la producción masiva.
 - [x] T098 [US12] Alineación de cabezas por el pelo en el cambio de pose — `src/timeline.py`, `src/compositor.py` — FR-059
 - [x] T099 [P] [US13] Tests de parpadeo por imagen (solo cambia la zona de los ojos, parpadeo doble con su probabilidad, nunca en un cambio de pose, pose sin parpadeo avisa) — `pruebas/unitarias/test_parpadeo_imagen.py` — FR-040, FR-043
 - [x] T100 [US13] Parpadeo por imagen: `<pose>_parpadeo.png` (3/4) y `frontal_parpadeo.png`/`_medio.png` (frontales, con `ojos_de`); pegado acotado a la banda de los lentes por ojo para no mover las cejas — `src/animation.py`, `src/layers/concretas.py` — FR-040, FR-043, FR-049
-- [ ] T101 [P] [US13] Tests de las variantes de reposo (sin repetir, cambio en pausa con mezcla de 2 frames, semilla) y de los acentos (3–6 s, vuelven al reposo, uno cada 20 s como máximo) — `pruebas/unitarias/test_naturalidad.py` — FR-044, FR-045, FR-046
-- [ ] T102 [US13] Variantes de reposo y acentos en el director, con todos los valores en `reglas_director.yaml` y cada comportamiento apagable — `src/director.py`, `reglas_director.yaml` — FR-044, FR-045, FR-046
+- [x] T101 [P] [US13] Tests de las variantes de reposo (sin repetir, cambio en pausa con mezcla de 2 frames, semilla) y de los acentos (3–6 s, vuelven al reposo, uno cada 20 s como máximo) — `pruebas/unitarias/test_naturalidad.py` — FR-044, FR-045, FR-046
+- [x] T102 [US13] Variantes de reposo y acentos en el director, con todos los valores en `reglas_director.yaml` y cada comportamiento apagable — `src/director.py`, `reglas_director.yaml` — FR-044, FR-045, FR-046
 - [ ] T103 [P] [US9] Tests del diccionario de palabras clave por idioma (español e inglés) y de la colocación del gesto en la pausa más cercana (±2 s) con registro del motivo — `pruebas/unitarias/test_gestos_palabras.py` — FR-095, FR-096
 - [ ] T104 [US9] Gestos por palabras clave en el director (`gestos.yaml`) — `src/director.py`, `gestos.yaml` — FR-095, FR-096
 - [ ] T105 [US5] Llevar a la UI y a `src/calibracion.py` la calibración por forma de los prototipos HTML (arrastrar, lupa, fantasma, traer valores, reflejo por forma, exportar e importar todas las poses) — `src/ui/calibracion.py`, `src/calibracion.py` — FR-062

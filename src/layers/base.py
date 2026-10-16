@@ -21,6 +21,8 @@ class ContextoFrame:
     dx: float          # movimiento leve, en píxeles del lienzo
     dy: float
     fase_ojos: str = "abierto"   # «abierto», «medio» o «cerrado» (parpadeo por imagen); sin ella vale `parpadeando`
+    toma_previa: Optional[Toma] = None   # durante la mezcla entre dos poses: la toma que se va (FR-044)
+    mezcla: float = 1.0                  # opacidad de la toma actual (1 = sin mezcla)
 
     @property
     def ojos(self) -> str:

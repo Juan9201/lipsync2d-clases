@@ -56,18 +56,34 @@ def _recortar_y_escalar(img: Image.Image, ventana: Ventana, lienzo: Tuple[int, i
 
 
 class FondoLayer:
+    """Fondo de imagen. Con `ventanas` (y `desenfoques`) por plano, cada toma recibe el recorte de su plano; el recorte
+    de cada plano se prepara la primera vez que se usa."""
+
     def __init__(self, ruta_fondo: Optional[Path], ventana: Ventana, lienzo: Tuple[int, int],
-                 salida: Tuple[int, int], desenfoque: float = 0.0):
-        self._capa: Optional[CapaRGBA] = None
-        if ruta_fondo is not None:
-            with Image.open(ruta_fondo) as im:
-                fondo = _recortar_y_escalar(im.convert("RGB"), ventana, lienzo, salida)
-            if desenfoque > 0:
-                fondo = fondo.filter(ImageFilter.GaussianBlur(desenfoque))
-            self._capa = CapaRGBA(fondo.convert("RGBA"), 0, 0)
+                 salida: Tuple[int, int], desenfoque: float = 0.0,
+                 ventanas: Optional[Dict[str, Ventana]] = None, desenfoques: Optional[Dict[str, float]] = None):
+        self._ruta, self._lienzo, self._salida = ruta_fondo, lienzo, salida
+        self._ventanas = dict(ventanas) if ventanas else None
+        self._desenfoques = dict(desenfoques or {})
+        self._por_plano: Dict[Optional[str], Optional[CapaRGBA]] = {}
+        self._defecto = self._preparar(ventana, desenfoque)
+
+    def _preparar(self, ventana: Ventana, desenfoque: float) -> Optional[CapaRGBA]:
+        if self._ruta is None:
+            return None
+        with Image.open(self._ruta) as im:
+            fondo = _recortar_y_escalar(im.convert("RGB"), ventana, self._lienzo, self._salida)
+        if desenfoque > 0:
+            fondo = fondo.filter(ImageFilter.GaussianBlur(desenfoque))
+        return CapaRGBA(fondo.convert("RGBA"), 0, 0)
 
     def renderizar(self, ctx: ContextoFrame) -> Optional[CapaRGBA]:
-        return self._capa
+        plano = ctx.toma.plano if ctx.toma is not None else None
+        if self._ventanas is None or plano not in self._ventanas:
+            return self._defecto
+        if plano not in self._por_plano:
+            self._por_plano[plano] = self._preparar(self._ventanas[plano], self._desenfoques.get(plano, 0.0))
+        return self._por_plano[plano]
 
 
 class CuerpoLayer:
