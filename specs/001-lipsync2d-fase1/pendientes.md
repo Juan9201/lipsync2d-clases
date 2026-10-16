@@ -1,6 +1,6 @@
 # Pendientes del proyecto — análisis del 2026-10-16
 
-Estado: 85 de 108 tareas de `tasks.md` marcadas; el pipeline de una clase funciona de punta a punta (voz, lipsync, 43 poses, parpadeo,
+Estado: 81 de 108 tareas de `tasks.md` marcadas; el pipeline de una clase funciona de punta a punta (voz, lipsync, 43 poses, parpadeo,
 director con cámara virtual). Lo que sigue es lo que **todavía no está conectado, no se ha medido o necesita una decisión**.
 Plazo: 20 de diciembre de 2026 (quedan 65 días). Meta: 7.632 clases de 5 min.
 
