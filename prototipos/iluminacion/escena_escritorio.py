@@ -18,7 +18,7 @@ from src.layers.personaje import PersonajeLayer
 from src.timeline import Toma
 
 ESCENA = Path(sys.argv[1])
-POSE = sys.argv[2] if len(sys.argv) > 2 else "frontal_neutro_01"
+POSE = next((a for a in sys.argv[2:] if a.startswith(("frontal_", "tres_cuartos"))), "frontal_neutro_01")
 W, H = 1280, 720
 CABEZA = (985, 282)          # dónde queda la cabeza del personaje en la escena (sentado en la silla)
 ESCALA = 0.70                # tamaño del personaje respecto a PL1
@@ -111,6 +111,22 @@ def personaje_rgba() -> Image.Image:
 
 
 def iluminar(pj: Image.Image) -> Image.Image:
+    mult, suma = mapas_de_luz(pj)
+    return aplicar_luz(pj, mult, suma)
+
+
+def aplicar_luz(pj: Image.Image, mult: np.ndarray, suma: np.ndarray, caja=None) -> Image.Image:
+    """Aplica los mapas de luz (calculados una vez por pose) a un frame del personaje: unas pocas operaciones por píxel."""
+    arr = np.asarray(pj, dtype=np.float32) / 255.0
+    alb, alfa = arr[..., :3], arr[..., 3]
+    lit = alb * mult
+    lit = lit / (1 + 0.30 * lit)                                        # compresión suave: el blanco no se quema
+    lit = np.clip(lit * 1.22 + suma, 0, 1)
+    return Image.fromarray((np.dstack([lit, alfa]) * 255).astype(np.uint8), "RGBA")
+
+
+def mapas_de_luz(pj: Image.Image):
+    """(multiplicador de color, reborde aditivo) por píxel; dependen de la silueta y de las luces, no de la cara que cambie."""
     arr = np.asarray(pj, dtype=np.float32) / 255.0
     alb, alfa = arr[..., :3], arr[..., 3]
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
@@ -135,16 +151,14 @@ def iluminar(pj: Image.Image) -> Image.Image:
     # la luz cambia sobre todo el brillo; su color se aplica a medias para que la piel y la ropa no se ensucien
     brillo_luz = (luz_total * np.array([0.30, 0.59, 0.11])).sum(-1, keepdims=True)
     tinte = luz_total / np.maximum(brillo_luz, 1e-4)
-    lit = alb * brillo_luz * (1 + 0.65 * (tinte - 1))
-    lit = lit / (1 + 0.30 * lit)                                        # compresión suave: el blanco no se quema
-    lit = np.clip(lit * 1.22, 0, 1)
+    mult = brillo_luz * (1 + 0.65 * (tinte - 1))
     # reborde cálido del lado de las lámparas
     borde = np.asarray(masc.filter(ImageFilter.GaussianBlur(4.5)), dtype=np.float32) / 255.0
     interior = np.asarray(masc.filter(ImageFilter.GaussianBlur(1.0)), dtype=np.float32) / 255.0
     contorno = np.clip(interior - borde, 0, 1) * 3.5 * (alfa > 0.5)
     mira_luz = np.clip(sum(((np.stack([L["pos"][0] - xx, L["pos"][1] - yy], -1) / np.maximum(np.linalg.norm(np.stack([L["pos"][0] - xx, L["pos"][1] - yy], -1), axis=-1, keepdims=True), 1e-3)) * n[..., :2]).sum(-1) * L["fuerza"] * np.exp(-((xx - L["pos"][0]) ** 2 + (yy - L["pos"][1]) ** 2) / (2 * (L["alcance"] * 1.2) ** 2)) for L in LUCES), 0, None)
-    lit = np.clip(lit + np.array([1.0, 0.82, 0.58]) * (contorno * np.clip(mira_luz, 0, 1.2) * 0.38)[..., None], 0, 1)
-    return Image.fromarray((np.dstack([lit, alfa]) * 255).astype(np.uint8), "RGBA")
+    suma = np.array([1.0, 0.82, 0.58], np.float32) * (contorno * np.clip(mira_luz, 0, 1.2) * 0.38)[..., None]
+    return mult.astype(np.float32), suma.astype(np.float32)
 
 
 def main():
