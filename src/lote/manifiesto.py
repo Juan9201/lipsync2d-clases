@@ -9,7 +9,8 @@ from typing import List, Tuple
 from src.errores import ErrorAccionable
 from src.lote.cola import Cola, Trabajo
 
-COLUMNAS = ["id", "guion", "audio", "personaje", "escenarios", "poses", "resolucion", "semilla", "tts", "lote"]
+COLUMNAS = ["id", "guion", "audio", "personaje", "escenarios", "poses", "resolucion", "semilla", "tts", "idioma", "lote"]
+IDIOMAS = ("es", "en", "mixto")
 RESOLUCIONES = ("1280x720", "1920x1080")
 ID_VALIDO = re.compile(r"^[\w\-]+$", re.UNICODE)
 AUDIOS = (".mp3", ".wav")
@@ -23,7 +24,7 @@ class InformeManifiesto:
 
 
 def crear_manifiesto(carpeta: Path, personaje: str, lote: str, destino: Path,
-                     poses: str = "", escenarios: str = "") -> InformeManifiesto:
+                     poses: str = "", escenarios: str = "", idioma: str = "es") -> InformeManifiesto:
     """Escanea `carpeta` buscando <id>.txt (guion) y <id>.mp3 o .wav (audio)."""
     carpeta = Path(carpeta).resolve()
     guiones = {p.stem: p for p in carpeta.glob("*.txt")}
@@ -41,7 +42,7 @@ def crear_manifiesto(carpeta: Path, personaje: str, lote: str, destino: Path,
                 inf.sin_guion.append(id_clase)
             w.writerow({"id": id_clase, "guion": str(guiones.get(id_clase, "")), "audio": str(audios.get(id_clase, "")),
                         "personaje": personaje, "escenarios": escenarios, "poses": poses,
-                        "resolucion": "1280x720", "semilla": "", "tts": "gemini-studio", "lote": lote})
+                        "resolucion": "1280x720", "semilla": "", "tts": "gemini-studio", "idioma": idioma, "lote": lote})
             inf.filas += 1
     return inf
 
@@ -76,6 +77,9 @@ def leer_manifiesto(ruta: Path, raiz: Path) -> List[Trabajo]:
             resolucion = fila.get("resolucion") or "1280x720"
             if resolucion not in RESOLUCIONES:
                 problemas.append(f"fila {n} ({id_clase}): resolución «{resolucion}» no válida (usa {' o '.join(RESOLUCIONES)})")
+            idioma = (fila.get("idioma") or "es").lower()
+            if idioma not in IDIOMAS:
+                problemas.append(f"fila {n} ({id_clase}): el idioma «{idioma}» no es válido (usa {', '.join(IDIOMAS)})")
             semilla = fila.get("semilla", "")
             if semilla and not semilla.lstrip("-").isdigit():
                 problemas.append(f"fila {n} ({id_clase}): la semilla «{semilla}» debe ser un número entero")
@@ -84,7 +88,7 @@ def leer_manifiesto(ruta: Path, raiz: Path) -> List[Trabajo]:
                 audio=audio or None, guion=guion or None, poses=fila.get("poses", ""),
                 escenarios=fila.get("escenarios", ""), resolucion=resolucion,
                 semilla=int(semilla) if semilla.lstrip("-").isdigit() and semilla else None,
-                tts=fila.get("tts") or "gemini-studio", genero=fila.get("genero") or None))
+                tts=fila.get("tts") or "gemini-studio", genero=fila.get("genero") or None, idioma=idioma))
     if problemas:
         raise ErrorAccionable(f"El manifiesto tiene {len(problemas)} problema(s):\n  " + "\n  ".join(problemas),
                               "Corrige las filas indicadas y vuelve a encolar")

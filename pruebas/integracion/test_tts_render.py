@@ -60,7 +60,7 @@ def proyecto(proyecto_tmp):
 
 def test_tts_caido_se_detiene_con_causa_y_alternativas(proyecto, monkeypatch, capsys):
     raiz, guion = proyecto
-    monkeypatch.setattr("src.tts.obtener_proveedor", lambda nombre, raiz=None, genero=None: (ProveedorCaido(), OpcionesTTS()))
+    monkeypatch.setattr("src.tts.obtener_proveedor", lambda nombre, raiz=None, genero=None, idioma=None: (ProveedorCaido(), OpcionesTTS()))
     codigo = main(["--personaje", "profesor", "--guion", str(guion)], raiz=raiz)
     err = capsys.readouterr().err
     assert codigo == 1 and "gemini-tts-studio" in err and "piper" in err and "--audio" in err
@@ -71,7 +71,7 @@ def test_sin_audio_genera_la_voz_y_renderiza(proyecto, monkeypatch, capsys):
     raiz, guion = proyecto
     prov = ProveedorQueGenera()
     prov.textos = []
-    monkeypatch.setattr("src.tts.obtener_proveedor", lambda nombre, raiz=None, genero=None: (prov, OpcionesTTS()))
+    monkeypatch.setattr("src.tts.obtener_proveedor", lambda nombre, raiz=None, genero=None, idioma=None: (prov, OpcionesTTS()))
     codigo = main(["--personaje", "profesor", "--guion", str(guion)], raiz=raiz)
     assert codigo == 0, capsys.readouterr().err
     assert (raiz / "clases" / "clase_0001.mp3").is_file()

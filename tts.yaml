@@ -16,6 +16,12 @@ gemini-studio:
   tono: normal                    # muy grave | grave | normal | agudo | muy agudo
   temperatura: 1.0
   # modelo_gemini: gemini-3.8-flash-tts
+  idiomas:                        # voz e idioma propios de cada idioma de clase (columna «idioma» del manifiesto)
+    en:
+      idioma: en-US
+      voces:                      # ids SIN VERIFICAR: elígelos en la pantalla de voces (python -m src.ui)
+        hombre: en-US-podcaster-3
+        mujer: en-US-podcaster-2
 
 edge:
   voces:                          # voces multilingües: leen bien español e inglés mezclados

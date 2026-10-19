@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS trabajos (
     id TEXT UNIQUE NOT NULL, lote TEXT NOT NULL DEFAULT '', personaje TEXT NOT NULL DEFAULT 'profesor',
     audio TEXT, guion TEXT, poses TEXT NOT NULL DEFAULT '', escenarios TEXT NOT NULL DEFAULT '',
     resolucion TEXT NOT NULL DEFAULT '1280x720', semilla INTEGER, tts TEXT NOT NULL DEFAULT 'gemini-studio',
-    genero TEXT, estado TEXT NOT NULL DEFAULT 'pendiente', intentos INTEGER NOT NULL DEFAULT 0,
+    genero TEXT, idioma TEXT NOT NULL DEFAULT 'es', estado TEXT NOT NULL DEFAULT 'pendiente', intentos INTEGER NOT NULL DEFAULT 0,
     error TEXT NOT NULL DEFAULT '', salida TEXT NOT NULL DEFAULT '',
     inicio REAL NOT NULL DEFAULT 0, fin REAL NOT NULL DEFAULT 0, latido REAL NOT NULL DEFAULT 0
 );
@@ -35,6 +35,7 @@ class Trabajo:
     semilla: Optional[int] = None
     tts: str = "gemini-studio"
     genero: Optional[str] = None
+    idioma: str = "es"                 # es | en | mixto: decide el reconocedor de visemas (FR-021)
     estado: str = "pendiente"
     intentos: int = 0
     error: str = ""
@@ -46,7 +47,7 @@ class Trabajo:
 
 _CAMPOS = [f.name for f in fields(Trabajo)]
 _CAMPOS_ENCOLAR = ["id", "lote", "personaje", "audio", "guion", "poses", "escenarios", "resolucion",
-                   "semilla", "tts", "genero"]
+                   "semilla", "tts", "genero", "idioma"]
 
 
 class Cola:
@@ -56,6 +57,9 @@ class Cola:
         with self._conexion() as con:
             con.execute("PRAGMA journal_mode=WAL")
             con.executescript(ESQUEMA)
+            columnas = {f["name"] for f in con.execute("PRAGMA table_info(trabajos)")}
+            if "idioma" not in columnas:                     # cola creada antes de existir el idioma por clase
+                con.execute("ALTER TABLE trabajos ADD COLUMN idioma TEXT NOT NULL DEFAULT 'es'")
 
     @contextmanager
     def _conexion(self) -> Iterator[sqlite3.Connection]:

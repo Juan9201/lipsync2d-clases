@@ -26,7 +26,10 @@ def construir_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=0, help="Semilla para que el resultado sea reproducible")
     p.add_argument("--pose", help="Pose a usar (por defecto, la primera)")
     p.add_argument("--escenario", help="Escenario a usar (por defecto, el primero)")
-    p.add_argument("--reconocedor", choices=("phonetic", "pocketSphinx"), default="phonetic")
+    p.add_argument("--idioma", choices=("es", "en", "mixto"), default="es",
+                   help="Idioma de la clase: elige la voz y el reconocedor de visemas (por defecto es)")
+    p.add_argument("--reconocedor", choices=("phonetic", "pocketSphinx"),
+                   help="Reconocedor de visemas (por defecto según el idioma: es y mixto phonetic, en pocketSphinx)")
     p.add_argument("--plano", choices=("PL1", "PL2", "PL3", "PL4", "PL5", "PL6"),
                    help="Plano de la cámara virtual (PL1 entero ... PL6 primerísimo primer plano); con director es "
                         "el plano inicial y sin director es el plano fijo (por defecto PL1)")
@@ -60,7 +63,7 @@ def resolver_poses(texto: Optional[str], raiz: Path, personaje: str) -> Optional
 
 
 def generar_voz(guion: Optional[Path], proveedor_nombre: str, raiz: Path,
-                genero: Optional[str] = None) -> Path:
+                genero: Optional[str] = None, idioma: Optional[str] = None) -> Path:
     """Sin --audio: genera la voz desde el guion (FR-010) y la guarda en clases/ para reutilizarla.
     Si el proveedor falla se detiene con la causa y las alternativas (FR-013)."""
     from src.errores import AssetInvalido
@@ -72,7 +75,7 @@ def generar_voz(guion: Optional[Path], proveedor_nombre: str, raiz: Path,
                               "Entrega un audio propio con --audio, o un guion con --guion y --tts")
     if not Path(guion).is_file():
         raise AssetInvalido(f"El guion no existe: {guion}", "Revisa la ruta indicada en --guion")
-    proveedor, opciones = obtener_proveedor(proveedor_nombre, raiz, genero)
+    proveedor, opciones = obtener_proveedor(proveedor_nombre, raiz, genero, idioma)
     destino = Path(raiz) / "clases" / f"{Path(guion).stem}.{proveedor.extension}"
     log = obtener_logger("tts")
     if destino.is_file():
@@ -90,14 +93,14 @@ def main(argv: Optional[List[str]] = None, raiz: Path = rutas.RAIZ) -> int:
     from src.render import ParametrosRender, renderizar   # import tardío: evita ciclos
     try:
         if args.audio is None:
-            audio = generar_voz(args.guion, args.tts, raiz, args.genero)
+            audio = generar_voz(args.guion, args.tts, raiz, args.genero, args.idioma)
         else:
             audio = args.audio
         ancho, alto = (int(v) for v in args.resolucion.split("x"))
         final = renderizar(ParametrosRender(
             personaje=args.personaje, audio=audio, guion=args.guion, pose=args.pose,
             escenario=args.escenario, resolucion=(ancho, alto), semilla=args.seed,
-            reconocedor=args.reconocedor, plano=args.plano or "PL1", plano_inicial=args.plano,
+            reconocedor=args.reconocedor or ("pocketSphinx" if args.idioma == "en" else "phonetic"), plano=args.plano or "PL1", plano_inicial=args.plano,
             director=args.director, reglas=args.reglas,
             poses=resolver_poses(args.poses, raiz, args.personaje), alinear=not args.sin_alinear,
             duracion_toma_s=args.duracion_toma), raiz=raiz)

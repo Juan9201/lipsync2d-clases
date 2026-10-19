@@ -68,3 +68,37 @@ def test_piper_ya_no_es_un_proveedor_valido(raiz):
 def test_voz_por_defecto_de_hombre_en_gemini_es_podcaster_3(proyecto_tmp):
     _, op = obtener_proveedor("gemini-studio", proyecto_tmp)
     assert op.voz == "es-419-podcaster-3"
+
+
+# ---------------- idioma por clase: la voz cambia con el idioma ----------------
+CONFIG_IDIOMAS = {
+    "genero": "hombre",
+    "gemini-studio": {"url": "http://127.0.0.1:5055", "idioma": "es-419", "voces": {"hombre": "es-voz-h", "mujer": "es-voz-m"},
+                      "idiomas": {"en": {"idioma": "en-US", "voces": {"hombre": "en-voz-h", "mujer": "en-voz-m"}}}},
+}
+
+
+@pytest.fixture
+def raiz_idiomas(proyecto_tmp):
+    (proyecto_tmp / "tts.yaml").write_text(yaml.safe_dump(CONFIG_IDIOMAS, allow_unicode=True), encoding="utf-8")
+    return proyecto_tmp
+
+
+def test_una_clase_en_ingles_usa_la_voz_y_el_idioma_en_ingles(raiz_idiomas):
+    _, op = obtener_proveedor("gemini-studio", raiz_idiomas, idioma="en")
+    assert op.voz == "en-voz-h" and op.idioma == "en-US"
+    _, op = obtener_proveedor("gemini-studio", raiz_idiomas, genero="mujer", idioma="en")
+    assert op.voz == "en-voz-m"
+
+
+def test_espanol_mixto_y_sin_idioma_usan_la_voz_de_siempre(raiz_idiomas):
+    for idioma in ("es", "mixto", None):
+        _, op = obtener_proveedor("gemini-studio", raiz_idiomas, idioma=idioma)
+        assert op.voz == "es-voz-h" and op.idioma == "es-419"
+
+
+def test_un_idioma_sin_voces_configuradas_cae_en_la_voz_por_defecto(raiz_idiomas):
+    (raiz_idiomas / "tts.yaml").write_text(yaml.safe_dump({"gemini-studio": {"idioma": "es-419", "voces": {"hombre": "x"}}}),
+                                           encoding="utf-8")
+    _, op = obtener_proveedor("gemini-studio", raiz_idiomas, idioma="en")
+    assert op.voz == "x" and op.idioma == "es-419"

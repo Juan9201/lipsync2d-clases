@@ -29,15 +29,17 @@ def _config(raiz: Path) -> dict:
     return yaml.safe_load(ruta.read_text(encoding="utf-8")) or {}
 
 
-def obtener_proveedor(nombre: str, raiz: Path = rutas.RAIZ,
-                      genero: Optional[str] = None) -> Tuple[ProveedorTTS, OpcionesTTS]:
-    """Devuelve el proveedor y sus opciones según tts.yaml y el género pedido."""
+def obtener_proveedor(nombre: str, raiz: Path = rutas.RAIZ, genero: Optional[str] = None,
+                      idioma: Optional[str] = None) -> Tuple[ProveedorTTS, OpcionesTTS]:
+    """Devuelve el proveedor y sus opciones según tts.yaml, el género y el idioma de la clase (es | en | mixto).
+    Una sección `idiomas: {en: {idioma: en-US, voces: {...}}}` del proveedor cambia la voz y el idioma de esa clase."""
     config = _config(raiz)
     genero = genero or config.get("genero") or GENERO_DEFECTO
     if genero not in GENEROS:
         raise TTSNoDisponible(f"Género de voz desconocido «{genero}»",
                               f"Usa «hombre» o «mujer» (en tts.yaml o con --genero)")
-    cfg = config.get(nombre, {}) or {}
+    cfg = dict(config.get(nombre, {}) or {})
+    cfg.update((cfg.get("idiomas") or {}).get(idioma) or {})            # lo propio del idioma manda sobre lo general
     voz = cfg.get("voz") or (cfg.get("voces") or {}).get(genero) or VOCES_DEFECTO.get(nombre, {}).get(genero)
     if nombre == "gemini-studio":
         from src.tts.gemini_studio import URL_DEFECTO, ProveedorGeminiStudio

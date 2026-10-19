@@ -34,6 +34,8 @@ def main(argv=None) -> int:
     c.add_argument("--lote", required=True, help="Etiqueta del lote, por ejemplo 2026-10-A")
     c.add_argument("--poses", default="", help="Poses permitidas separadas por ;")
     c.add_argument("--escenarios", default="", help="Escenarios permitidos separados por ;")
+    c.add_argument("--idioma", default="es", choices=("es", "en", "mixto"),
+                   help="Idioma de las clases (decide el reconocedor de visemas; por defecto es)")
     c.add_argument("--salida", type=Path, help="Archivo CSV (por defecto lote/manifiestos/<lote>.csv)")
     e = sub.add_parser("encolar", parents=[comun], help="Crea los trabajos de un manifiesto")
     e.add_argument("manifiesto", type=Path)
@@ -52,7 +54,8 @@ def main(argv=None) -> int:
     try:
         if args.orden == "crear":
             destino = args.salida or rutas.RAIZ / "lote" / "manifiestos" / f"{args.lote}.csv"
-            inf = crear_manifiesto(args.carpeta, args.personaje, args.lote, destino, args.poses, args.escenarios)
+            inf = crear_manifiesto(args.carpeta, args.personaje, args.lote, destino, args.poses, args.escenarios,
+                                   args.idioma)
             print(f"Manifiesto creado: {destino}  ({inf.filas} clases)")
             if inf.sin_audio:
                 print(f"  AVISO  {len(inf.sin_audio)} guiones sin audio (se generará con el TTS al correr): "
