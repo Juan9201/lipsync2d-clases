@@ -1,4 +1,4 @@
-"""T083 (FR-064, FR-071): la lógica de la interfaz — guiones, voces, render y lote — sin navegador."""
+"""T083 (FR-064, FR-071): la lógica de la interfaz — guiones, render y lote — sin navegador."""
 import csv
 import sys
 
@@ -12,12 +12,12 @@ from src.ui.logica import Tareas
 
 # ---------------- guiones ----------------
 def test_guardar_una_clase_crea_el_guion_con_sus_ajustes_y_el_siguiente_numero(proyecto_tmp):
-    a = logica.guardar_clase(proyecto_tmp, "Hola a todos. Hoy aprendemos.", idioma="en", genero="mujer")
+    a = logica.guardar_clase(proyecto_tmp, "Hola a todos. Hoy aprendemos.", idioma="en", voz="neutro")
     b = logica.guardar_clase(proyecto_tmp, "Segunda clase.")
     assert (a["id"], b["id"]) == ("clase_0001", "clase_0002")
-    assert a["idioma"] == "en" and a["genero"] == "mujer" and a["palabras"] == 5
+    assert a["idioma"] == "en" and a["voz"] == "neutro" and a["palabras"] == 5
     assert (proyecto_tmp / "clases" / "clase_0001.txt").read_text(encoding="utf-8").startswith("Hola a todos")
-    assert b["idioma"] == "es" and b["genero"] == "hombre"                       # por defecto
+    assert b["idioma"] == "es" and b["voz"] == "colombiano"                       # por defecto
 
 
 def test_un_guion_vacio_o_un_id_malo_se_rechazan_con_una_accion(proyecto_tmp):
@@ -29,11 +29,11 @@ def test_un_guion_vacio_o_un_id_malo_se_rechazan_con_una_accion(proyecto_tmp):
             logica.guardar_clase(proyecto_tmp, "texto", malo)
 
 
-def test_idioma_y_genero_invalidos_se_rechazan(proyecto_tmp):
+def test_idioma_y_voz_invalidos_se_rechazan(proyecto_tmp):
     with pytest.raises(ErrorAccionable):
         logica.guardar_clase(proyecto_tmp, "texto", idioma="fr")
     with pytest.raises(ErrorAccionable):
-        logica.guardar_clase(proyecto_tmp, "texto", genero="otro")
+        logica.guardar_clase(proyecto_tmp, "texto", voz="otro")
 
 
 def test_importar_varios_archivos_usa_el_nombre_del_archivo_y_no_pisa_los_existentes(proyecto_tmp):
@@ -45,12 +45,12 @@ def test_importar_varios_archivos_usa_el_nombre_del_archivo_y_no_pisa_los_existe
 
 
 def test_actualizar_cambia_ajustes_y_texto_y_conserva_lo_demas(proyecto_tmp):
-    logica.guardar_clase(proyecto_tmp, "texto viejo", "c1", idioma="en", genero="mujer", escenarios="E2")
-    ficha = logica.actualizar_clase(proyecto_tmp, "c1", genero="hombre", texto="texto nuevo")
-    assert ficha["genero"] == "hombre" and ficha["idioma"] == "en" and ficha["escenarios"] == "E2"
+    logica.guardar_clase(proyecto_tmp, "texto viejo", "c1", idioma="en", voz="neutro", escenarios="E2")
+    ficha = logica.actualizar_clase(proyecto_tmp, "c1", voz="colombiano", texto="texto nuevo")
+    assert ficha["voz"] == "colombiano" and ficha["idioma"] == "en" and ficha["escenarios"] == "E2"
     assert logica.leer_texto(proyecto_tmp, "c1").strip() == "texto nuevo"
     with pytest.raises(ErrorAccionable):
-        logica.actualizar_clase(proyecto_tmp, "no_existe", genero="mujer")
+        logica.actualizar_clase(proyecto_tmp, "no_existe", voz="neutro")
 
 
 def test_quitar_una_clase_no_borra_el_guion_lo_mueve_a_la_papelera(proyecto_tmp):
@@ -82,32 +82,6 @@ def test_escenarios_y_poses_disponibles(proyecto_tmp):
     (base / "P1_viejo").mkdir()
     poses = logica.poses_disponibles(proyecto_tmp)
     assert [(p["id"], p["parpadeo"]) for p in poses] == [("frontal_neutro_01", True)]
-
-
-# ---------------- voces ----------------
-def test_guardar_voces_va_a_tts_usuario_y_no_toca_tts_yaml(proyecto_tmp):
-    original = "gemini-studio:\n  voces: {hombre: es-original-h, mujer: es-original-m}  # comentario\n"
-    (proyecto_tmp / "tts.yaml").write_text(original, encoding="utf-8")
-    logica.guardar_voces(proyecto_tmp, "en", "en-h", None)
-    logica.guardar_voces(proyecto_tmp, "es", None, "es-nueva-m")
-    assert (proyecto_tmp / "tts.yaml").read_text(encoding="utf-8") == original
-    v = logica.voces_guardadas(proyecto_tmp)
-    assert v["en"] == {"hombre": "en-h", "mujer": None} and v["es"] == {"hombre": "es-original-h", "mujer": "es-nueva-m"}
-
-
-def test_las_voces_elegidas_las_usa_el_proveedor_de_tts(proyecto_tmp):
-    from src.tts import obtener_proveedor
-    (proyecto_tmp / "tts.yaml").write_text("gemini-studio: {idioma: es-419, voces: {hombre: x, mujer: y}}\n", encoding="utf-8")
-    logica.guardar_voces(proyecto_tmp, "en", "en-voz-h", "en-voz-m")
-    _, op = obtener_proveedor("gemini-studio", proyecto_tmp, "mujer", "en")
-    assert op.voz == "en-voz-m" and op.idioma == "en-US"
-
-
-def test_guardar_voces_sin_elegir_ninguna_o_con_idioma_raro_falla(proyecto_tmp):
-    with pytest.raises(ErrorAccionable):
-        logica.guardar_voces(proyecto_tmp, "es", None, None)
-    with pytest.raises(ErrorAccionable):
-        logica.guardar_voces(proyecto_tmp, "fr", "a", "b")
 
 
 # ---------------- render ----------------
@@ -169,13 +143,13 @@ def test_un_comando_que_falla_muestra_la_linea_de_error(proyecto_tmp):
 
 
 # ---------------- lote ----------------
-def test_crear_lote_escribe_el_manifiesto_con_idioma_y_genero_y_encola(proyecto_tmp):
-    logica.guardar_clase(proyecto_tmp, "hola", "c1", idioma="es", genero="mujer")
+def test_crear_lote_escribe_el_manifiesto_con_idioma_y_voz_y_encola(proyecto_tmp):
+    logica.guardar_clase(proyecto_tmp, "hola", "c1", idioma="es", voz="neutro")
     logica.guardar_clase(proyecto_tmp, "hello", "c2", idioma="en")
     r = logica.crear_lote(proyecto_tmp, "L1", ["c1", "c2"])
     assert r["encoladas"] == 2
     filas = list(csv.DictReader(open(proyecto_tmp / "lote" / "manifiestos" / "L1.csv", encoding="utf-8-sig")))
-    assert {(f["id"], f["idioma"], f["genero"]) for f in filas} == {("c1", "es", "mujer"), ("c2", "en", "hombre")}
+    assert {(f["id"], f["idioma"], f["voz"]) for f in filas} == {("c1", "es", "neutro"), ("c2", "en", "colombiano")}
     assert logica.crear_lote(proyecto_tmp, "L1", ["c1"])["ya_estaban"] == 1
     estado = logica.estado_lote(proyecto_tmp)
     assert estado["total"] == 2 and estado["estados"] == {"pendiente": 2}
@@ -199,24 +173,3 @@ def test_render_y_lote_de_una_clase_inexistente_dan_un_error_claro_no_un_fallo(p
     assert "No existe la clase" in str(e1.value)
     with pytest.raises(ErrorAccionable):
         logica.crear_lote(proyecto_tmp, "L1", ["no_existe"])
-
-
-def test_escuchar_una_voz_elegida_genera_la_muestra_con_esa_voz(proyecto_tmp, monkeypatch):
-    """Regresión: elegir una voz del catálogo y pulsar «Escuchar» fallaba con FrozenInstanceError."""
-    from src.tts.base import OpcionesTTS
-    usadas = []
-
-    def falso_sintetizar(proveedor, texto, destino, opciones):
-        usadas.append((opciones.voz, texto))
-        destino.parent.mkdir(parents=True, exist_ok=True)
-        destino.write_bytes(b"mp3")
-        return destino
-    monkeypatch.setattr("src.tts.obtener_proveedor", lambda nombre, raiz=None, genero=None, idioma=None: (object(), OpcionesTTS(voz="es-original")))
-    monkeypatch.setattr("src.tts.comun.sintetizar_texto", falso_sintetizar)
-    ruta = logica.muestra_de_voz(proyecto_tmp, "es", "hombre", "es-419-podcaster-8")
-    assert ruta.is_file() and ruta.name == "es_hombre_es-419-podcaster-8.mp3"
-    assert usadas == [("es-419-podcaster-8", logica.TEXTO_MUESTRA["es"])]
-    logica.muestra_de_voz(proyecto_tmp, "es", "hombre", "es-419-podcaster-8")
-    assert len(usadas) == 1                                          # la muestra ya existe: no se vuelve a generar
-    logica.muestra_de_voz(proyecto_tmp, "en", "mujer")
-    assert usadas[-1][0] == "es-original"                            # sin voz elegida usa la guardada

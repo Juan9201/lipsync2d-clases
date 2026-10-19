@@ -28,6 +28,7 @@ def construir_parser() -> argparse.ArgumentParser:
     p.add_argument("--escenario", help="Escenario a usar (por defecto, el primero)")
     p.add_argument("--idioma", choices=("es", "en", "mixto"), default="es",
                    help="Idioma de la clase: elige la voz y el reconocedor de visemas (por defecto es)")
+    p.add_argument("--acento", help="Perfil de voz de tts.yaml (colombiano o neutro); por defecto el de tts.yaml")
     p.add_argument("--reconocedor", choices=("phonetic", "pocketSphinx"),
                    help="Reconocedor de visemas (por defecto según el idioma: es y mixto phonetic, en pocketSphinx)")
     p.add_argument("--plano", choices=("PL1", "PL2", "PL3", "PL4", "PL5", "PL6"),
@@ -63,7 +64,7 @@ def resolver_poses(texto: Optional[str], raiz: Path, personaje: str) -> Optional
 
 
 def generar_voz(guion: Optional[Path], proveedor_nombre: str, raiz: Path,
-                genero: Optional[str] = None, idioma: Optional[str] = None) -> Path:
+                genero: Optional[str] = None, idioma: Optional[str] = None, perfil: Optional[str] = None) -> Path:
     """Sin --audio: genera la voz desde el guion (FR-010) y la guarda en clases/ para reutilizarla.
     Si el proveedor falla se detiene con la causa y las alternativas (FR-013)."""
     from src.errores import AssetInvalido
@@ -75,7 +76,7 @@ def generar_voz(guion: Optional[Path], proveedor_nombre: str, raiz: Path,
                               "Entrega un audio propio con --audio, o un guion con --guion y --tts")
     if not Path(guion).is_file():
         raise AssetInvalido(f"El guion no existe: {guion}", "Revisa la ruta indicada en --guion")
-    proveedor, opciones = obtener_proveedor(proveedor_nombre, raiz, genero, idioma)
+    proveedor, opciones = obtener_proveedor(proveedor_nombre, raiz, genero, idioma, perfil)
     destino = Path(raiz) / "clases" / f"{Path(guion).stem}.{proveedor.extension}"
     log = obtener_logger("tts")
     if destino.is_file():
@@ -93,7 +94,7 @@ def main(argv: Optional[List[str]] = None, raiz: Path = rutas.RAIZ) -> int:
     from src.render import ParametrosRender, renderizar   # import tardío: evita ciclos
     try:
         if args.audio is None:
-            audio = generar_voz(args.guion, args.tts, raiz, args.genero, args.idioma)
+            audio = generar_voz(args.guion, args.tts, raiz, args.genero, args.idioma, args.acento)
         else:
             audio = args.audio
         ancho, alto = (int(v) for v in args.resolucion.split("x"))

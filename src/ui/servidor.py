@@ -117,9 +117,9 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                     return self._archivo(WEB / "index.html", "text/html; charset=utf-8")
                 if ruta in ("/app.js", "/app.css"):
                     return self._archivo(WEB / ruta[1:], "text/javascript; charset=utf-8" if ruta.endswith(".js") else "text/css; charset=utf-8")
-                if ruta.startswith(("/salidas/", "/muestras/")):
+                if ruta.startswith("/salidas/"):
                     nombre = ruta.split("/", 2)[2]
-                    carpeta = app.raiz / "salidas" if ruta.startswith("/salidas/") else app.raiz / "cache" / "muestras"
+                    carpeta = app.raiz / "salidas"
                     if not ARCHIVO_SEGURO.match(nombre) or ".." in nombre:
                         return self._error("Archivo no válido", 404)
                     return self._archivo(carpeta / nombre)
@@ -133,10 +133,6 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                 m = re.match(r"^/api/clases/([^/]+)/texto$", ruta)
                 if m:
                     return self._json({"texto": logica.leer_texto(app.raiz, m.group(1))})
-                if ruta == "/api/voces":
-                    idioma = (consulta.get("idioma") or ["es"])[0]
-                    return self._json({"guardadas": logica.voces_guardadas(app.raiz),
-                                       "catalogo": logica.listar_voces_remoto(idioma)})
                 if ruta == "/api/tareas":
                     return self._json({"tareas": app.tareas.listar()})
                 if ruta == "/api/lote":
@@ -176,11 +172,6 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                 if m:
                     logica.quitar_escenario(app.raiz, m.group(1))
                     return self._json({"ok": True})
-                if ruta == "/api/voces":
-                    return self._json({"guardadas": logica.guardar_voces(app.raiz, d.get("idioma", ""), d.get("hombre"), d.get("mujer"))})
-                if ruta == "/api/muestra":
-                    archivo = logica.muestra_de_voz(app.raiz, d.get("idioma", "es"), d.get("genero", "hombre"), d.get("voz"))
-                    return self._json({"url": f"/muestras/{archivo.name}"})
                 if ruta == "/api/voz/generar":
                     return self._json({"tarea": self._generar_voz(d)})
                 if ruta == "/api/render":
@@ -247,7 +238,7 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                 shutil.move(str(carpeta / ficha["audio"]), str(papelera / f"{Path(ficha['audio']).stem}-{time.strftime('%Y%m%d-%H%M%S')}{Path(ficha['audio']).suffix}"))
             guion = carpeta / f"{id_clase}.txt"
             return app.tareas.lanzar_funcion(
-                f"Voz de {id_clase}", lambda: generar_voz(guion, "gemini-studio", app.raiz, ficha["genero"], ficha["idioma"]), id_clase)
+                f"Voz de {id_clase}", lambda: generar_voz(guion, "gemini-studio", app.raiz, "hombre", ficha["idioma"], ficha["voz"]), id_clase)
 
     servidor = ThreadingHTTPServer(("127.0.0.1", puerto), Manejador)
     servidor.daemon_threads = True

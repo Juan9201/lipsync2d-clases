@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const estado = { clases: [], marcadas: new Set(), vistoVideo: null, voces: null, escenarios: [] };
+const estado = { clases: [], marcadas: new Set(), vistoVideo: null, escenarios: [] };
 
 // ---------- utilidades ----------
 function h(tag, attrs, ...hijos) {
@@ -63,16 +63,16 @@ function pintarClases() {
     const idioma = h("select", { onchange: ev => cambiar(c.id, { idioma: ev.target.value }) },
       ...[["es", "Español"], ["en", "English"], ["mixto", "Mixto"]].map(([v, t]) => h("option", { value: v }, t)));
     idioma.value = c.idioma;
-    const genero = h("select", { onchange: ev => cambiar(c.id, { genero: ev.target.value }) },
-      h("option", { value: "hombre" }, "Hombre"), h("option", { value: "mujer" }, "Mujer"));
-    genero.value = c.genero;
+    const voz = h("select", { onchange: ev => cambiar(c.id, { voz: ev.target.value }) },
+      h("option", { value: "colombiano" }, "Colombiano"), h("option", { value: "neutro" }, "Neutro"));
+    voz.value = c.voz;
     const escenario = h("select", { onchange: ev => cambiar(c.id, { escenarios: ev.target.value }) },
       h("option", { value: "" }, "Automático"), ...estado.escenarios.map(x => h("option", { value: x.id }, `${x.id} ${x.nombre}`)));
     escenario.value = c.escenarios;
     return h("tr", {},
       h("td", {}, marca),
       h("td", {}, h("strong", {}, c.id), h("div", { class: "vista", title: c.vista_previa }, c.vista_previa)),
-      h("td", {}, idioma), h("td", {}, genero), h("td", {}, escenario),
+      h("td", {}, idioma), h("td", {}, voz), h("td", {}, escenario),
       h("td", {}, `${c.palabras} (~${c.minutos} min)`),
       h("td", {}, c.audio ? h("span", { class: "ok" }, "✓ " + c.audio) : h("span", { class: "aviso" }, "sin voz")),
       h("td", {}, c.video ? h("a", { href: "#", onclick: ev => { ev.preventDefault(); verVideo(c.video); } }, "▶ ver") : "—"),
@@ -92,7 +92,7 @@ async function cambiar(id, campos) { await seguro(async () => { await api("/api/
 $("btn-actualizar").onclick = () => seguro(async () => { await cargarClases(); await cargarEstado(); });
 
 $("btn-guardar").onclick = () => seguro(async () => {
-  const c = await api("/api/clases", { texto: $("nuevo-texto").value, id: $("nuevo-id").value.trim(), idioma: $("nuevo-idioma").value, genero: $("nuevo-genero").value });
+  const c = await api("/api/clases", { texto: $("nuevo-texto").value, id: $("nuevo-id").value.trim(), idioma: $("nuevo-idioma").value, voz: $("nuevo-voz").value });
   $("nuevo-texto").value = ""; $("nuevo-id").value = "";
   avisar(`Clase ${c.id} guardada (${c.palabras} palabras).`, true); await cargarClases();
 });
@@ -100,7 +100,7 @@ $("btn-importar").onclick = () => seguro(async () => {
   const archivos = [...$("archivos").files];
   if (!archivos.length) throw new Error("Elige uno o varios archivos .txt primero");
   const datos = await Promise.all(archivos.map(async f => ({ nombre: f.name, texto: await f.text() })));
-  const r = await api("/api/clases/importar", { archivos: datos, idioma: $("nuevo-idioma").value, genero: $("nuevo-genero").value });
+  const r = await api("/api/clases/importar", { archivos: datos, idioma: $("nuevo-idioma").value, voz: $("nuevo-voz").value });
   $("archivos").value = ""; avisar(`${r.ids.length} clase(s) importada(s).`, true); await cargarClases();
 });
 
@@ -137,35 +137,6 @@ function verVideo(nombre, cambiarPestana = true) {
   const v = $("visor"); if (estado.vistoVideo !== nombre) { v.src = "/salidas/" + encodeURIComponent(nombre); estado.vistoVideo = nombre; }
   v.hidden = false; $("visor-nota").textContent = nombre;
   if (cambiarPestana) document.querySelector('#pestanas button[data-p="render"]').click();
-}
-
-// ---------- voces (catálogo) ----------
-$("btn-voces").onclick = () => seguro(async () => {
-  $("voces-nota").textContent = "Consultando el catálogo…";
-  const [es, en] = await Promise.all([api("/api/voces?idioma=es"), api("/api/voces?idioma=en")]);
-  $("voces-nota").textContent = "Elige, escucha y guarda.";
-  const guardadas = es.guardadas;
-  $("voces").replaceChildren(columnaVoces("es", "Español", es.catalogo, guardadas.es), columnaVoces("en", "English", en.catalogo, guardadas.en));
-});
-function columnaVoces(idioma, titulo, catalogo, actual) {
-  const opciones = g => [h("option", { value: "" }, "(sin cambiar)"), ...catalogo.filter(v => !g || !v.genero || v.genero.startsWith(g))
-    .map(v => h("option", { value: v.id, title: v.descripcion }, `${v.nombre}${v.genero ? " · " + v.genero : ""}`))];
-  const selH = h("select", {}, ...opciones("m")), selM = h("select", {}, ...opciones("f"));
-  const audio = h("audio", { controls: true, hidden: true, style: "width:100%" });
-  const escuchar = (genero, sel) => seguro(async () => {
-    const voz = sel.value || actual[genero]; if (!voz) throw new Error("No hay voz elegida ni guardada para escuchar");
-    avisar("Generando la muestra…", true);
-    const r = await api("/api/muestra", { idioma, genero, voz }); audio.src = r.url; audio.hidden = false; audio.play();
-  });
-  return h("div", { class: "col" },
-    h("h3", {}, titulo), h("div", { class: "nota" }, `Guardada: hombre ${actual.hombre || "—"} · mujer ${actual.mujer || "—"}`),
-    h("label", {}, "Voz de hombre"), selH, h("button", { class: "chico", onclick: () => escuchar("hombre", selH) }, "▶ Escuchar"),
-    h("label", {}, "Voz de mujer"), selM, h("button", { class: "chico", onclick: () => escuchar("mujer", selM) }, "▶ Escuchar"),
-    audio,
-    h("div", { class: "fila" }, h("button", { class: "primario chico", onclick: () => seguro(async () => {
-      await api("/api/voces", { idioma, hombre: selH.value || null, mujer: selM.value || null });
-      avisar(`Voces de ${titulo} guardadas. Las clases nuevas ya las usan.`, true); $("btn-voces").click();
-    }) }, "Guardar estas voces")));
 }
 
 // ---------- tareas ----------

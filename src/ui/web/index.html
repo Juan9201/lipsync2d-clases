@@ -30,7 +30,7 @@
         <div class="fila">
           <label>Número <input id="nuevo-id" placeholder="clase_0001" size="14"></label>
           <label>Idioma <select id="nuevo-idioma"><option value="es">Español</option><option value="en">English</option><option value="mixto">Mixto</option></select></label>
-          <label>Voz <select id="nuevo-genero"><option value="hombre">Hombre</option><option value="mujer">Mujer</option></select></label>
+          <label>Voz <select id="nuevo-voz"><option value="colombiano">Colombiano</option><option value="neutro">Neutro</option></select></label>
           <button id="btn-guardar" class="primario">Guardar clase</button>
         </div>
         <div class="fila sub">
@@ -41,9 +41,10 @@
       </div>
 
       <div class="panel">
-        <h2>Voces</h2>
-        <div class="fila"><button id="btn-voces">Cargar las voces disponibles</button><span class="nota" id="voces-nota">Necesita gemini-tts-studio encendido.</span></div>
-        <div id="voces" class="voces"></div>
+        <h2>Voz</h2>
+        <p>Todas las clases se narran con la misma voz masculina, en español, inglés o mezclado.</p>
+        <p class="nota"><strong>Colombiano</strong>: con acento colombiano (el predeterminado). <strong>Neutro</strong>: sin instrucción de acento.
+          Se elige por clase en la lista.</p>
       </div>
     </div>
 

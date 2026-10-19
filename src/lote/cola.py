@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS trabajos (
     id TEXT UNIQUE NOT NULL, lote TEXT NOT NULL DEFAULT '', personaje TEXT NOT NULL DEFAULT 'profesor',
     audio TEXT, guion TEXT, poses TEXT NOT NULL DEFAULT '', escenarios TEXT NOT NULL DEFAULT '',
     resolucion TEXT NOT NULL DEFAULT '1280x720', semilla INTEGER, tts TEXT NOT NULL DEFAULT 'gemini-studio',
-    genero TEXT, idioma TEXT NOT NULL DEFAULT 'es', estado TEXT NOT NULL DEFAULT 'pendiente', intentos INTEGER NOT NULL DEFAULT 0,
+    genero TEXT, idioma TEXT NOT NULL DEFAULT 'es', voz TEXT NOT NULL DEFAULT 'colombiano', estado TEXT NOT NULL DEFAULT 'pendiente', intentos INTEGER NOT NULL DEFAULT 0,
     error TEXT NOT NULL DEFAULT '', salida TEXT NOT NULL DEFAULT '',
     inicio REAL NOT NULL DEFAULT 0, fin REAL NOT NULL DEFAULT 0, latido REAL NOT NULL DEFAULT 0
 );
@@ -36,6 +36,7 @@ class Trabajo:
     tts: str = "gemini-studio"
     genero: Optional[str] = None
     idioma: str = "es"                 # es | en | mixto: decide el reconocedor de visemas (FR-021)
+    voz: str = "colombiano"            # perfil de voz de tts.yaml: colombiano | neutro
     estado: str = "pendiente"
     intentos: int = 0
     error: str = ""
@@ -47,7 +48,7 @@ class Trabajo:
 
 _CAMPOS = [f.name for f in fields(Trabajo)]
 _CAMPOS_ENCOLAR = ["id", "lote", "personaje", "audio", "guion", "poses", "escenarios", "resolucion",
-                   "semilla", "tts", "genero", "idioma"]
+                   "semilla", "tts", "genero", "idioma", "voz"]
 
 
 class Cola:
@@ -60,6 +61,8 @@ class Cola:
             columnas = {f["name"] for f in con.execute("PRAGMA table_info(trabajos)")}
             if "idioma" not in columnas:                     # cola creada antes de existir el idioma por clase
                 con.execute("ALTER TABLE trabajos ADD COLUMN idioma TEXT NOT NULL DEFAULT 'es'")
+            if "voz" not in columnas:                        # ... o el perfil de voz
+                con.execute("ALTER TABLE trabajos ADD COLUMN voz TEXT NOT NULL DEFAULT 'colombiano'")
 
     @contextmanager
     def _conexion(self) -> Iterator[sqlite3.Connection]:

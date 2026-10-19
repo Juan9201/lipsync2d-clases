@@ -42,7 +42,7 @@ def _config(raiz: Path) -> dict:
 
 
 def obtener_proveedor(nombre: str, raiz: Path = rutas.RAIZ, genero: Optional[str] = None,
-                      idioma: Optional[str] = None) -> Tuple[ProveedorTTS, OpcionesTTS]:
+                      idioma: Optional[str] = None, perfil: Optional[str] = None) -> Tuple[ProveedorTTS, OpcionesTTS]:
     """Devuelve el proveedor y sus opciones según tts.yaml, el género y el idioma de la clase (es | en | mixto).
     Una sección `idiomas: {en: {idioma: en-US, voces: {...}}}` del proveedor cambia la voz y el idioma de esa clase."""
     config = _config(raiz)
@@ -51,6 +51,13 @@ def obtener_proveedor(nombre: str, raiz: Path = rutas.RAIZ, genero: Optional[str
         raise TTSNoDisponible(f"Género de voz desconocido «{genero}»",
                               f"Usa «hombre» o «mujer» (en tts.yaml o con --genero)")
     cfg = dict(config.get(nombre, {}) or {})
+    perfiles = cfg.get("perfiles") or {}
+    perfil = perfil or cfg.get("perfil")
+    if perfil and perfiles:                                             # perfil de voz: p. ej. colombiano | neutro
+        if perfil not in perfiles:
+            raise TTSNoDisponible(f"El perfil de voz «{perfil}» no existe en tts.yaml",
+                                  f"Usa uno de: {', '.join(perfiles)}")
+        cfg.update(perfiles[perfil] or {})
     cfg.update((cfg.get("idiomas") or {}).get(idioma) or {})            # lo propio del idioma manda sobre lo general
     voz = cfg.get("voz") or (cfg.get("voces") or {}).get(genero) or VOCES_DEFECTO.get(nombre, {}).get(genero)
     if nombre == "gemini-studio":

@@ -76,7 +76,7 @@ def ejecutar_trabajo(t: Trabajo, raiz: Path) -> Path:
     params = parametros_de(t, raiz)
     if not params.audio.is_file():
         from src.cli import generar_voz
-        params.audio = generar_voz(params.guion, t.tts, raiz, t.genero, t.idioma)
+        params.audio = generar_voz(params.guion, t.tts, raiz, t.genero, t.idioma, t.voz)
     return renderizar(params, raiz)
 
 

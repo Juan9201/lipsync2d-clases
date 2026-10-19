@@ -9,8 +9,9 @@ from typing import List, Tuple
 from src.errores import ErrorAccionable
 from src.lote.cola import Cola, Trabajo
 
-COLUMNAS = ["id", "guion", "audio", "personaje", "escenarios", "poses", "resolucion", "semilla", "tts", "genero", "idioma", "lote"]
+COLUMNAS = ["id", "guion", "audio", "personaje", "escenarios", "poses", "resolucion", "semilla", "tts", "genero", "idioma", "voz", "lote"]
 IDIOMAS = ("es", "en", "mixto")
+PERFILES_VOZ = ("colombiano", "neutro")
 RESOLUCIONES = ("1280x720", "1920x1080")
 ID_VALIDO = re.compile(r"^[\w\-]+$", re.UNICODE)
 AUDIOS = (".mp3", ".wav")
@@ -42,7 +43,7 @@ def crear_manifiesto(carpeta: Path, personaje: str, lote: str, destino: Path,
                 inf.sin_guion.append(id_clase)
             w.writerow({"id": id_clase, "guion": str(guiones.get(id_clase, "")), "audio": str(audios.get(id_clase, "")),
                         "personaje": personaje, "escenarios": escenarios, "poses": poses,
-                        "resolucion": "1280x720", "semilla": "", "tts": "gemini-studio", "genero": "", "idioma": idioma, "lote": lote})
+                        "resolucion": "1280x720", "semilla": "", "tts": "gemini-studio", "genero": "", "idioma": idioma, "voz": "colombiano", "lote": lote})
             inf.filas += 1
     return inf
 
@@ -92,6 +93,9 @@ def leer_manifiesto(ruta: Path, raiz: Path) -> List[Trabajo]:
             idioma = (fila.get("idioma") or "es").lower()
             if idioma not in IDIOMAS:
                 problemas.append(f"fila {n} ({id_clase}): el idioma «{idioma}» no es válido (usa {', '.join(IDIOMAS)})")
+            voz = (fila.get("voz") or "colombiano").lower()
+            if voz not in PERFILES_VOZ:
+                problemas.append(f"fila {n} ({id_clase}): la voz «{voz}» no es válida (usa {', '.join(PERFILES_VOZ)})")
             semilla = fila.get("semilla", "")
             if semilla and not semilla.lstrip("-").isdigit():
                 problemas.append(f"fila {n} ({id_clase}): la semilla «{semilla}» debe ser un número entero")
@@ -100,7 +104,7 @@ def leer_manifiesto(ruta: Path, raiz: Path) -> List[Trabajo]:
                 audio=audio or None, guion=guion or None, poses=fila.get("poses", ""),
                 escenarios=fila.get("escenarios", ""), resolucion=resolucion,
                 semilla=int(semilla) if semilla.lstrip("-").isdigit() and semilla else None,
-                tts=fila.get("tts") or "gemini-studio", genero=fila.get("genero") or None, idioma=idioma))
+                tts=fila.get("tts") or "gemini-studio", genero=fila.get("genero") or None, idioma=idioma, voz=voz))
     if problemas:
         raise ErrorAccionable(f"El manifiesto tiene {len(problemas)} problema(s):\n  " + "\n  ".join(problemas),
                               "Corrige las filas indicadas y vuelve a encolar")

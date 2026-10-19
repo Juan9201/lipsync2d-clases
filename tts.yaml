@@ -16,12 +16,13 @@ gemini-studio:
   tono: normal                    # muy grave | grave | normal | agudo | muy agudo
   temperatura: 1.0
   # modelo_gemini: gemini-3.8-flash-tts
-  idiomas:                        # voz e idioma propios de cada idioma de clase (columna «idioma» del manifiesto)
-    en:
-      idioma: en-US
-      voces:                      # ids del catálogo (en minúsculas); cámbialos en la pantalla de voces (python -m src.ui)
-        hombre: en-us-podcaster-4
-        mujer: en-us-podcaster-2
+  # Casting (decidido el 2026-10-19): la misma voz masculina para todo, en español, inglés o mezclado.
+  perfil: colombiano              # perfil por defecto
+  perfiles:
+    colombiano:                   # podcaster-3 con instrucción de acento (la elegida)
+      estilo: "Habla con acento colombiano natural (de Bogotá), cálido, claro y pausado, como un profesor amable."
+    neutro:                       # podcaster-3 sin instrucción: el español mexicano de la voz original
+      estilo: ""
 
 edge:
   voces:                          # voces multilingües: leen bien español e inglés mezclados

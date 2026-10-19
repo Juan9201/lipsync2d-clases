@@ -1,9 +1,8 @@
 """Lógica de la interfaz web local (FR-064, FR-071): guiones, voces, render y lote. Sin HTTP aquí: el servidor solo
 traduce peticiones a estas funciones, así se prueban sin navegador.
 
-Los guiones viven en `clases/<id>.txt` con sus ajustes (idioma, género de la voz, escenarios y poses permitidos) en
-`clases/<id>.json`. Las voces que eliges se guardan en `tts_usuario.yaml`, que manda sobre `tts.yaml` sin tocarlo."""
-import dataclasses
+Los guiones viven en `clases/<id>.txt` con sus ajustes (idioma, voz, escenarios y poses permitidos) en `clases/<id>.json`.
+La voz es siempre la misma (podcaster-3); solo se elige entre el acento colombiano y el neutro (perfiles de tts.yaml)."""
 import json
 import re
 import shutil
@@ -24,10 +23,8 @@ from src.errores import ErrorAccionable
 ID_VALIDO = re.compile(r"^[A-Za-z0-9_\-]{1,60}$")
 IDIOMAS = ("es", "en", "mixto")
 GENEROS = ("hombre", "mujer")
-CODIGO_IDIOMA = {"es": "es-419", "en": "en-US"}                  # idioma que se pide a la webapp de voz
-TEXTO_MUESTRA = {"es": "Hola, bienvenidos a la clase de hoy. Vamos a aprender algo nuevo.",
-                 "en": "Hello, and welcome to today's class. Let's learn something new."}
-CAMPOS_CLASE = ("idioma", "genero", "escenarios", "poses")
+CAMPOS_CLASE = ("idioma", "voz", "escenarios", "poses")
+VOCES = ("colombiano", "neutro")                                   # el casting: la misma voz con o sin acento colombiano
 
 
 # ---------------------------------------------------------------- guiones
@@ -48,7 +45,7 @@ def _leer_meta(raiz: Path, id_clase: str) -> dict:
         datos = json.loads(ruta.read_text(encoding="utf-8")) if ruta.is_file() else {}
     except (ValueError, OSError):
         datos = {}
-    return {"idioma": datos.get("idioma", "es"), "genero": datos.get("genero", "hombre"),
+    return {"idioma": datos.get("idioma", "es"), "genero": "hombre", "voz": datos.get("voz", "colombiano"),
             "escenarios": datos.get("escenarios", ""), "poses": datos.get("poses", "")}
 
 
@@ -62,10 +59,10 @@ def _validar_campos(campos: dict) -> dict:
         if campos["idioma"] not in IDIOMAS:
             raise ErrorAccionable(f"El idioma «{campos['idioma']}» no es válido", f"Usa {', '.join(IDIOMAS)}")
         limpio["idioma"] = campos["idioma"]
-    if "genero" in campos:
-        if campos["genero"] not in GENEROS:
-            raise ErrorAccionable(f"El género «{campos['genero']}» no es válido", f"Usa {' o '.join(GENEROS)}")
-        limpio["genero"] = campos["genero"]
+    if "voz" in campos:
+        if campos["voz"] not in VOCES:
+            raise ErrorAccionable(f"La voz «{campos['voz']}» no es válida", f"Usa {' o '.join(VOCES)}")
+        limpio["voz"] = campos["voz"]
     for k in ("escenarios", "poses"):
         if k in campos:
             limpio[k] = str(campos[k] or "").strip()
@@ -343,66 +340,6 @@ def estado_recursos(raiz: Path, personaje: str = "profesor", comprobar_voz: bool
             "vistas": sorted({p["vista"] for p in poses}), "escenarios": escenarios_disponibles(raiz)}
 
 
-# ---------------------------------------------------------------- voces
-def _config_voces(raiz: Path) -> dict:
-    from src.tts import _config
-    return (_config(Path(raiz)).get("gemini-studio") or {})
-
-
-def voces_guardadas(raiz: Path) -> Dict[str, Dict[str, Optional[str]]]:
-    """{idioma: {hombre: id, mujer: id}} según tts.yaml y tts_usuario.yaml."""
-    cfg = _config_voces(raiz)
-    es = cfg.get("voces") or {}
-    en = ((cfg.get("idiomas") or {}).get("en") or {}).get("voces") or {}
-    return {"es": {"hombre": es.get("hombre"), "mujer": es.get("mujer")},
-            "en": {"hombre": en.get("hombre"), "mujer": en.get("mujer")}}
-
-
-def guardar_voces(raiz: Path, idioma: str, hombre: Optional[str], mujer: Optional[str]) -> dict:
-    if idioma not in CODIGO_IDIOMA:
-        raise ErrorAccionable(f"El idioma «{idioma}» no tiene voces propias", "Elige es o en (mixto usa las de es)")
-    ruta = Path(raiz) / "tts_usuario.yaml"
-    datos = (yaml.safe_load(ruta.read_text(encoding="utf-8")) or {}) if ruta.is_file() else {}
-    gem = datos.setdefault("gemini-studio", {})
-    voces = {k: v for k, v in (("hombre", hombre), ("mujer", mujer)) if v}
-    if not voces:
-        raise ErrorAccionable("No elegiste ninguna voz", "Elige al menos una voz antes de guardar")
-    if idioma == "es":
-        gem.setdefault("voces", {}).update(voces)
-        gem["idioma"] = CODIGO_IDIOMA["es"]
-    else:
-        en = gem.setdefault("idiomas", {}).setdefault("en", {})
-        en.setdefault("voces", {}).update(voces)
-        en["idioma"] = CODIGO_IDIOMA["en"]
-    ruta.write_text("# Voces elegidas en la interfaz (python -m src.ui). Manda sobre tts.yaml; bórralo para volver a lo de tts.yaml.\n"
-                    + yaml.safe_dump(datos, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    return voces_guardadas(raiz)
-
-
-def listar_voces_remoto(idioma: str, url: str = "http://127.0.0.1:5055") -> List[dict]:
-    """Voces del catálogo de gemini-tts-studio para un idioma (id, nombre, género, descripción)."""
-    from src.tts.gemini_studio import ProveedorGeminiStudio
-    if idioma not in CODIGO_IDIOMA:
-        raise ErrorAccionable(f"El idioma «{idioma}» no tiene catálogo de voces", "Elige es o en")
-    datos = ProveedorGeminiStudio(url, timeout_s=30)._pedir(f"/api/voices?language={CODIGO_IDIOMA[idioma]}")
-    return [{"id": v["id"], "nombre": v.get("name") or v["id"], "genero": (v.get("gender") or "").lower(),
-             "descripcion": v.get("description") or ""} for v in datos.get("voces", datos.get("voices", []))]
-
-
-def muestra_de_voz(raiz: Path, idioma: str, genero: str, voz: Optional[str] = None, texto: Optional[str] = None) -> Path:
-    """Genera una frase corta con la voz indicada (o la guardada) para escucharla antes de elegirla."""
-    from src.tts import obtener_proveedor
-    from src.tts.comun import sintetizar_texto
-    idioma_voz = "en" if idioma == "en" else "es"
-    proveedor, opciones = obtener_proveedor("gemini-studio", Path(raiz), genero, idioma_voz)
-    if voz:
-        opciones = dataclasses.replace(opciones, voz=voz)          # OpcionesTTS es inmutable
-    destino = Path(raiz) / "cache" / "muestras" / f"{idioma_voz}_{genero}_{re.sub(r'[^A-Za-z0-9_-]+', '_', opciones.voz or 'defecto')}.mp3"
-    if not destino.is_file():
-        sintetizar_texto(proveedor, texto or TEXTO_MUESTRA[idioma_voz], destino, opciones)
-    return destino
-
-
 # ---------------------------------------------------------------- tareas en segundo plano
 def comando_render(raiz: Path, id_clase: str, escenario: str = "", director: bool = True, plano: str = "") -> List[str]:
     """Línea de comandos que renderiza una clase con sus ajustes (la voz debe existir)."""
@@ -515,7 +452,7 @@ def crear_lote(raiz: Path, nombre: str, ids: List[str]) -> dict:
         filas.append({"id": id_clase, "guion": str(_carpeta(raiz) / f"{id_clase}.txt"),
                       "audio": str(_carpeta(raiz) / f["audio"]) if f["audio"] else "", "personaje": "profesor",
                       "escenarios": f["escenarios"], "poses": f["poses"], "resolucion": "1280x720", "semilla": "",
-                      "tts": "gemini-studio", "genero": f["genero"], "idioma": f["idioma"], "lote": nombre})
+                      "tts": "gemini-studio", "genero": "hombre", "idioma": f["idioma"], "voz": f["voz"], "lote": nombre})
     destino = Path(raiz) / "lote" / "manifiestos" / f"{nombre}.csv"
     escribir_manifiesto(filas, destino)
     nuevos, duplicados = encolar_manifiesto(Cola(Path(raiz) / "lote" / "cola.db"), destino, Path(raiz))
