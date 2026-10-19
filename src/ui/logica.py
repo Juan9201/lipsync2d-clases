@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+import unicodedata
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -165,16 +166,150 @@ def eliminar_clase(raiz: Path, id_clase: str) -> None:
 
 
 # ---------------------------------------------------------------- recursos del proyecto
+CARPETA_ESCENARIO = re.compile(r"^(E\d+)(?:_(.*))?$")
+EXTENSIONES_FONDO = (".png", ".jpg", ".jpeg", ".webp", ".mp4")
+MIN_FONDO = (1280, 720)
+
+
+def _fondo_de(carpeta: Path) -> Optional[Path]:
+    return next((carpeta / n for n in ("fondo.mp4", "fondo.png", "fondo.jpg") if (carpeta / n).is_file()), None)
+
+
+def _medidas(fondo: Path) -> dict:
+    """Tipo, medidas (y duración si es video) de un fondo; vacío si no se puede leer."""
+    try:
+        if fondo.suffix.lower() == ".mp4":
+            from src.layers.fondo_video import _sondear
+            i = _sondear(fondo)
+            return {"tipo": "video", "ancho": i["ancho"], "alto": i["alto"], "duracion": round(i["duracion"], 1)}
+        from PIL import Image
+        with Image.open(fondo) as im:
+            return {"tipo": "imagen", "ancho": im.width, "alto": im.height, "duracion": None}
+    except Exception:
+        return {"tipo": "video" if fondo.suffix.lower() == ".mp4" else "imagen", "ancho": 0, "alto": 0, "duracion": None}
+
+
 def escenarios_disponibles(raiz: Path) -> List[dict]:
     carpeta = Path(raiz) / "escenarios"
     if not carpeta.is_dir():
         return []
     salida = []
     for d in sorted(carpeta.iterdir()):
-        m = re.match(r"^(E\d+)(?:_(.*))?$", d.name)
+        m = CARPETA_ESCENARIO.match(d.name)
         if d.is_dir() and m:
-            salida.append({"id": m.group(1), "nombre": m.group(2) or "", "tipo": "video" if (d / "fondo.mp4").is_file() else "imagen"})
+            fondo = _fondo_de(d)
+            salida.append({"id": m.group(1), "nombre": m.group(2) or "", "carpeta": d.name,
+                           **(_medidas(fondo) if fondo else {"tipo": "imagen", "ancho": 0, "alto": 0, "duracion": None})})
     return sorted(salida, key=lambda e: int(e["id"][1:]))
+
+
+def _nombre_seguro(texto: str) -> str:
+    base = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode("ascii")
+    base = Path(base.replace("\\", "/")).name                      # nunca una ruta
+    return re.sub(r"[^A-Za-z0-9]+", "_", base).strip("_")[:30] or "fondo"
+
+
+def agregar_escenario(raiz: Path, nombre: str, extension: str, origen: Path, reemplazar: Optional[str] = None) -> dict:
+    """Valida un fondo (imagen 16:9 o MP4 de al menos 1 s) y lo deja en escenarios/E<n>_<nombre>/fondo.<ext>. Un número nuevo
+    es el siguiente al mayor; con `reemplazar` ("E2") conserva su número y el fondo anterior va a escenarios/_papelera."""
+    from src.biblioteca.validacion import validar_escenario
+    from src.layers.fondo_video import DURACION_MINIMA_S
+    raiz, origen = Path(raiz), Path(origen)
+    ext = (extension or "").lower()
+    if ext not in EXTENSIONES_FONDO:
+        raise ErrorAccionable(f"El archivo «{ext or 'sin extensión'}» no se puede usar como fondo",
+                              "Sube una imagen PNG o JPG (también WebP) o un video MP4")
+    base = raiz / "escenarios"
+    existentes = escenarios_disponibles(raiz)
+    if reemplazar:
+        destino_info = next((e for e in existentes if e["id"] == reemplazar), None)
+        if destino_info is None:
+            raise ErrorAccionable(f"No existe el escenario «{reemplazar}» para reemplazar", "Actualiza la lista de escenarios")
+        carpeta, numero = base / destino_info["carpeta"], reemplazar
+    else:
+        numero = f"E{max((int(e['id'][1:]) for e in existentes), default=0) + 1}"
+        carpeta = base / f"{numero}_{_nombre_seguro(nombre)}"
+    # 1) se prepara y valida aparte: si algo falla no se toca lo que ya había
+    prueba = raiz / "cache" / "subidas" / f"validar_{numero}_{int(time.time() * 1000)}"
+    prueba.mkdir(parents=True)
+    try:
+        if ext == ".webp":
+            from PIL import Image
+            try:
+                with Image.open(origen) as im:
+                    im.convert("RGB").save(prueba / "fondo.png")
+            except Exception as exc:
+                raise ErrorAccionable("No se pudo leer la imagen WebP", "Expórtala de nuevo como PNG o JPG") from exc
+            nombre_fondo = "fondo.png"
+        else:
+            nombre_fondo = "fondo" + (".jpg" if ext == ".jpeg" else ext)
+            shutil.copyfile(origen, prueba / nombre_fondo)
+        validar_escenario(prueba)                                   # 16:9 y legible (AssetInvalido es un ErrorAccionable)
+        medidas = _medidas(prueba / nombre_fondo)
+        if medidas["tipo"] == "video" and (medidas["duracion"] or 0) < DURACION_MINIMA_S:
+            raise ErrorAccionable(f"El video dura solo {medidas['duracion']} segundos",
+                                  f"Usa un video de al menos {DURACION_MINIMA_S:.0f} segundo (lo ideal son 10 a 20)")
+        # 2) se coloca: el fondo anterior (si se reemplaza) pasa a la papelera
+        if carpeta.is_dir():
+            papelera = base / "_papelera" / f"{carpeta.name}-{time.strftime('%Y%m%d-%H%M%S')}"
+            papelera.mkdir(parents=True)
+            for viejo in carpeta.glob("fondo.*"):
+                shutil.move(str(viejo), str(papelera / viejo.name))
+        carpeta.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(prueba / nombre_fondo), str(carpeta / nombre_fondo))
+    finally:
+        shutil.rmtree(prueba, ignore_errors=True)
+        try:
+            (raiz / "cache" / "subidas").rmdir()
+        except OSError:
+            pass
+    aviso = ""
+    if medidas["ancho"] < MIN_FONDO[0] or medidas["alto"] < MIN_FONDO[1]:
+        aviso = f"Mide {medidas['ancho']}x{medidas['alto']}, menos de {MIN_FONDO[0]}x{MIN_FONDO[1]}: se verá ampliado y borroso"
+    return {"id": numero, "carpeta": carpeta.name, "nombre": carpeta.name.split("_", 1)[1] if "_" in carpeta.name else "",
+            **medidas, "aviso": aviso}
+
+
+def _carpeta_escenario(raiz: Path, carpeta: str) -> Path:
+    if not CARPETA_ESCENARIO.match(carpeta or "") or "/" in carpeta or "\\" in carpeta:
+        raise ErrorAccionable(f"El escenario «{carpeta}» no es válido", "Actualiza la lista de escenarios")
+    ruta = Path(raiz) / "escenarios" / carpeta
+    if not ruta.is_dir():
+        raise ErrorAccionable(f"No existe el escenario «{carpeta}»", "Actualiza la lista de escenarios")
+    return ruta
+
+
+def quitar_escenario(raiz: Path, carpeta: str) -> None:
+    """No borra: mueve el escenario entero a escenarios/_papelera/."""
+    ruta = _carpeta_escenario(raiz, carpeta)
+    destino = Path(raiz) / "escenarios" / "_papelera"
+    destino.mkdir(exist_ok=True)
+    shutil.move(str(ruta), str(destino / f"{carpeta}-{time.strftime('%Y%m%d-%H%M%S')}"))
+
+
+def miniatura_escenario(raiz: Path, carpeta: str) -> Path:
+    """JPG de 480 px de ancho del fondo (en un video, el fotograma de 1 s); se rehace si el fondo cambió."""
+    ruta = _carpeta_escenario(raiz, carpeta)
+    fondo = _fondo_de(ruta)
+    if fondo is None:
+        raise ErrorAccionable(f"El escenario {carpeta} no tiene fondo", "Súbele un fondo")
+    destino = Path(raiz) / "cache" / "miniaturas" / f"{carpeta}.jpg"
+    if destino.is_file() and destino.stat().st_mtime >= fondo.stat().st_mtime:
+        return destino
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    if fondo.suffix.lower() == ".mp4":
+        subprocess.run([str(rutas.FFMPEG), "-v", "error", "-y", "-ss", "1", "-i", str(fondo), "-frames:v", "1", "-vf", "scale=480:-2", str(destino)],
+                       check=True, creationflags=SIN_VENTANA)
+        if not destino.is_file():                                        # video más corto de 1 s: primer fotograma
+            subprocess.run([str(rutas.FFMPEG), "-v", "error", "-y", "-i", str(fondo), "-frames:v", "1", "-vf", "scale=480:-2", str(destino)],
+                           check=True, creationflags=SIN_VENTANA)
+    else:
+        from PIL import Image
+        with Image.open(fondo) as im:
+            im = im.convert("RGB")
+            im.thumbnail((480, 480))
+            im.save(destino, quality=82)
+    return destino
 
 
 def poses_disponibles(raiz: Path, personaje: str = "profesor") -> List[dict]:

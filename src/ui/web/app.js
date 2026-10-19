@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const estado = { clases: [], marcadas: new Set(), vistoVideo: null, voces: null };
+const estado = { clases: [], marcadas: new Set(), vistoVideo: null, voces: null, escenarios: [] };
 
 // ---------- utilidades ----------
 function h(tag, attrs, ...hijos) {
@@ -29,6 +29,7 @@ for (const b of document.querySelectorAll("#pestanas button")) b.onclick = () =>
   document.querySelectorAll("#pestanas button").forEach(x => x.classList.toggle("activa", x === b));
   for (const s of document.querySelectorAll("main > section")) s.hidden = s.id !== "p-" + b.dataset.p;
   if (b.dataset.p === "lote") cargarLote();
+  if (b.dataset.p === "escenarios") cargarEscenarios();
 };
 
 // ---------- estado del proyecto ----------
@@ -38,6 +39,7 @@ async function cargarEstado() {
   $("chips").replaceChildren(chip("voz (gemini-tts-studio)", e.tts), chip("ffmpeg", e.ffmpeg), chip("Rhubarb", e.rhubarb),
     h("span", { class: "chip" }, `${e.poses} poses · ${e.poses_con_parpadeo} con parpadeo`),
     h("span", { class: "chip" }, `${e.escenarios.length} escenario(s)`));
+  estado.escenarios = e.escenarios;
   const sel = $("op-escenario"), actual = sel.value;
   sel.replaceChildren(h("option", { value: "" }, "Automático (según la clase)"),
     ...e.escenarios.map(x => h("option", { value: x.id }, `${x.id} ${x.nombre} (${x.tipo})`)));
@@ -64,10 +66,13 @@ function pintarClases() {
     const genero = h("select", { onchange: ev => cambiar(c.id, { genero: ev.target.value }) },
       h("option", { value: "hombre" }, "Hombre"), h("option", { value: "mujer" }, "Mujer"));
     genero.value = c.genero;
+    const escenario = h("select", { onchange: ev => cambiar(c.id, { escenarios: ev.target.value }) },
+      h("option", { value: "" }, "Automático"), ...estado.escenarios.map(x => h("option", { value: x.id }, `${x.id} ${x.nombre}`)));
+    escenario.value = c.escenarios;
     return h("tr", {},
       h("td", {}, marca),
       h("td", {}, h("strong", {}, c.id), h("div", { class: "vista", title: c.vista_previa }, c.vista_previa)),
-      h("td", {}, idioma), h("td", {}, genero),
+      h("td", {}, idioma), h("td", {}, genero), h("td", {}, escenario),
       h("td", {}, `${c.palabras} (~${c.minutos} min)`),
       h("td", {}, c.audio ? h("span", { class: "ok" }, "✓ " + c.audio) : h("span", { class: "aviso" }, "sin voz")),
       h("td", {}, c.video ? h("a", { href: "#", onclick: ev => { ev.preventDefault(); verVideo(c.video); } }, "▶ ver") : "—"),
@@ -208,6 +213,52 @@ $("btn-lote-correr").onclick = () => seguro(async () => {
 });
 $("btn-lote-reintentar").onclick = () => seguro(async () => { const r = await api("/api/lote/reintentar", {}); avisar(`${r.reintentadas} clase(s) vuelven a la cola.`, true); cargarLote(); });
 $("lote-nombre").placeholder = new Date().toISOString().slice(0, 10) + "-A";
+
+// ---------- escenarios (fondos) ----------
+async function cargarEscenarios() {
+  const e = await api("/api/estado"); estado.escenarios = e.escenarios;
+  $("esc-vacio").hidden = e.escenarios.length > 0; $("esc-cuenta").textContent = e.escenarios.length ? `(${e.escenarios.length})` : "";
+  $("esc-lista").replaceChildren(...e.escenarios.map(x => {
+    const reemplazo = h("input", { type: "file", accept: ".png,.jpg,.jpeg,.webp,.mp4", hidden: true, onchange: ev => { if (ev.target.files[0]) subirFondo(ev.target.files[0], x.nombre, x.id); } });
+    return h("div", { class: "tarjeta" },
+      h("img", { src: `/miniaturas/${encodeURIComponent(x.carpeta)}.jpg?v=${Date.now()}`, alt: x.carpeta, loading: "lazy" }),
+      h("div", { class: "cuerpo" }, h("strong", {}, `${x.id} ${x.nombre}`),
+        h("div", { class: "nota" }, `${x.tipo === "video" ? "Video" : "Imagen"} · ${x.ancho}×${x.alto}` + (x.duracion ? ` · ${x.duracion} s` : "")),
+        (x.ancho && (x.ancho < 1280 || x.alto < 720)) ? h("div", { class: "aviso nota" }, "Menor que 1280×720: se verá borroso") : "",
+        h("div", { class: "fila" }, h("button", { class: "chico", onclick: () => reemplazo.click() }, "Reemplazar"), reemplazo,
+          h("button", { class: "chico", onclick: () => quitarEscenario(x) }, "Quitar"))));
+  }));
+  await cargarEstado();
+}
+function subirFondo(archivo, nombre, reemplazar) {
+  return new Promise(resolver => {
+    const barra = $("esc-progreso"), texto = $("esc-estado");
+    const xhr = new XMLHttpRequest();
+    const q = new URLSearchParams({ nombre: nombre || archivo.name.replace(/\.[^.]+$/, ""), archivo: archivo.name });
+    if (reemplazar) q.set("reemplazar", reemplazar);
+    xhr.open("POST", "/api/escenarios?" + q);
+    xhr.setRequestHeader("X-Lipsync", "1"); xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    barra.hidden = false; barra.value = 0; texto.textContent = "Subiendo…";
+    xhr.upload.onprogress = ev => { if (ev.lengthComputable) { barra.value = 100 * ev.loaded / ev.total; texto.textContent = `Subiendo… ${Math.round(100 * ev.loaded / ev.total)} %`; } };
+    xhr.onload = () => {
+      barra.hidden = true; let d = {}; try { d = JSON.parse(xhr.responseText); } catch (e) { }
+      if (xhr.status === 200) { texto.textContent = ""; avisar(`Fondo ${d.id} listo (${d.ancho}×${d.alto}).` + (d.aviso ? " Ojo: " + d.aviso + "." : ""), !d.aviso); cargarEscenarios(); }
+      else { texto.textContent = ""; avisar(d.error || "No se pudo subir el fondo"); }
+      resolver();
+    };
+    xhr.onerror = () => { barra.hidden = true; texto.textContent = ""; avisar("Se perdió la conexión con la interfaz mientras subía"); resolver(); };
+    xhr.send(archivo);
+  });
+}
+$("btn-esc-subir").onclick = async () => {
+  const f = $("esc-archivo").files[0];
+  if (!f) return avisar("Elige primero un archivo de imagen o video");
+  await subirFondo(f, $("esc-nombre").value.trim(), null); $("esc-archivo").value = ""; $("esc-nombre").value = "";
+};
+async function quitarEscenario(x) {
+  if (!confirm(`¿Quitar ${x.id} ${x.nombre}? Se guarda en escenarios/_papelera. Las clases que lo usaban pasan a Automático.`)) return;
+  await seguro(async () => { await api(`/api/escenarios/${encodeURIComponent(x.carpeta)}/eliminar`, {}); avisar("Escenario quitado.", true); await cargarEscenarios(); await cargarClases(); });
+}
 
 // ---------- arranque ----------
 seguro(async () => { await cargarEstado(); await cargarClases(); sondear(); });

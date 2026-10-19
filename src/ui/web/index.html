@@ -11,6 +11,7 @@
   <h1>Lipsync 2D</h1>
   <nav id="pestanas">
     <button data-p="guiones" class="activa">Guiones y voz</button>
+    <button data-p="escenarios">Escenarios</button>
     <button data-p="render">Render</button>
     <button data-p="lote">Lote</button>
   </nav>
@@ -55,11 +56,28 @@
         <button id="btn-actualizar">Actualizar lista</button>
       </div>
       <table id="tabla-clases">
-        <thead><tr><th><input type="checkbox" id="marcar-todas" title="Marcar todas"></th><th>Clase</th><th>Idioma</th><th>Voz</th><th>Palabras</th><th>Audio</th><th>Video</th><th></th></tr></thead>
+        <thead><tr><th><input type="checkbox" id="marcar-todas" title="Marcar todas"></th><th>Clase</th><th>Idioma</th><th>Voz</th><th>Escenario</th><th>Palabras</th><th>Audio</th><th>Video</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
       <p class="nota" id="vacio" hidden>Todavía no hay clases. Pega un guion arriba o importa archivos .txt.</p>
     </div>
+  </section>
+
+  <!-- ============ ESCENARIOS ============ -->
+  <section id="p-escenarios" hidden>
+    <div class="panel">
+      <h2>Subir un fondo</h2>
+      <p class="nota">Imagen PNG, JPG o WebP, o video MP4 de al menos 1 segundo (lo ideal: 10 a 20 s). Debe ser 16:9; lo mejor es 1920×1080 o más.
+        Un video se repite en bucle durante la clase.</p>
+      <div class="fila">
+        <input type="file" id="esc-archivo" accept=".png,.jpg,.jpeg,.webp,.mp4,image/*,video/mp4">
+        <label>Nombre <input id="esc-nombre" placeholder="calle, aula, biblioteca…" size="18"></label>
+        <button id="btn-esc-subir" class="primario">Subir fondo</button>
+      </div>
+      <div class="fila"><progress id="esc-progreso" value="0" max="100" hidden style="width:320px"></progress><span id="esc-estado" class="nota"></span></div>
+    </div>
+    <div class="panel"><h2>Escenarios <span id="esc-cuenta" class="nota"></span></h2><div id="esc-lista" class="tarjetas"></div>
+      <p class="nota" id="esc-vacio" hidden>Todavía no hay escenarios. Sube un fondo arriba.</p></div>
   </section>
 
   <!-- ============ RENDER ============ -->

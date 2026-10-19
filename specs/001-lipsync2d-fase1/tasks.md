@@ -149,7 +149,7 @@ confirmes el checkpoint del MVP.**
 ## Fase 10: US6 (P3) — interfaz web local
 - [x] T083 [P] [US6] Tests de la lógica de la UI (subida y validación de assets, formulario → parámetros de render) — `pruebas/unitarias/test_ui_logica.py` — FR-064, FR-071
 - [x] T084 [US6] `src/ui/` con Gradio: pestaña Render (guion, voz o audio, personaje, escenario, resolución, reproductor, descarga) — `src/ui/render.py` — FR-071
-- [ ] T085 [US6] Pestaña Biblioteca con arrastrar y soltar y selector de archivos, validación al subir, y pestaña Calibración por clic — `src/ui/biblioteca.py`, `src/ui/calibracion.py` — FR-064, FR-062 **(parcial 2026-10-19: guiones, voces, render y lote hechos; falta subir poses y escenarios y la calibración, que sigue en el Editor de poses)**
+- [ ] T085 [US6] Pestaña Biblioteca con arrastrar y soltar y selector de archivos, validación al subir, y pestaña Calibración por clic — `src/ui/biblioteca.py`, `src/ui/calibracion.py` — FR-064, FR-062 **(parcial 2026-10-19: guiones, voces, render, lote y subida de escenarios/fondos hechos; falta subir poses y la calibración, que sigue en el Editor de poses)**
 - [x] T086 [US6] Pestaña Cola/Lotes (estado en vivo) — `src/ui/lotes.py` — FR-105
 - **Checkpoint US6:** sube una pose arrastrándola, renderiza y descarga el MP4 desde el navegador.
 

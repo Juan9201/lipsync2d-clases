@@ -17,6 +17,7 @@ from src.ui.logica import Tareas
 
 WEB = Path(__file__).resolve().parent / "web"
 MAX_CUERPO = 40 * 1024 * 1024
+MAX_SUBIDA = 2 * 1024 ** 3                       # un video de fondo puede ser grande
 ARCHIVO_SEGURO = re.compile(r"^[\w\-. ]+\.(mp4|mp3|wav)$")
 
 
@@ -122,6 +123,9 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                     if not ARCHIVO_SEGURO.match(nombre) or ".." in nombre:
                         return self._error("Archivo no válido", 404)
                     return self._archivo(carpeta / nombre)
+                m = re.match(r"^/miniaturas/([^/]+)\.jpg$", ruta)
+                if m:
+                    return self._archivo(logica.miniatura_escenario(app.raiz, m.group(1)), "image/jpeg")
                 if ruta == "/api/estado":
                     return self._json(logica.estado_recursos(app.raiz))
                 if ruta == "/api/clases":
@@ -149,8 +153,11 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                 return self._error("Host no permitido", 403)
             if self.headers.get("X-Lipsync") != "1":
                 return self._error("Falta la cabecera de seguridad X-Lipsync", 403)
-            ruta = unquote(urlparse(self.path).path)
+            url = urlparse(self.path)
+            ruta = unquote(url.path)
             try:
+                if ruta == "/api/escenarios":                          # subida binaria: el cuerpo es el archivo
+                    return self._subir_escenario(parse_qs(url.query))
                 d = self._leer_json()
                 campos = {k: d[k] for k in logica.CAMPOS_CLASE if k in d}
                 if ruta == "/api/clases":
@@ -164,6 +171,10 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                 m = re.match(r"^/api/clases/([^/]+)/eliminar$", ruta)
                 if m:
                     logica.eliminar_clase(app.raiz, m.group(1))
+                    return self._json({"ok": True})
+                m = re.match(r"^/api/escenarios/([^/]+)/eliminar$", ruta)
+                if m:
+                    logica.quitar_escenario(app.raiz, m.group(1))
                     return self._json({"ok": True})
                 if ruta == "/api/voces":
                     return self._json({"guardadas": logica.guardar_voces(app.raiz, d.get("idioma", ""), d.get("hombre"), d.get("mujer"))})
@@ -194,6 +205,34 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                 return None
             except Exception as exc:                                  # un fallo no debe tumbar el servidor
                 return self._error(f"{type(exc).__name__}: {exc}", 500)
+
+        def _subir_escenario(self, consulta: dict):
+            largo = int(self.headers.get("Content-Length") or 0)
+            if largo <= 0 or largo > MAX_SUBIDA:
+                raise ErrorAccionable("El archivo está vacío o es demasiado grande (máximo 2 GB)", "Elige otro archivo")
+            nombre = (consulta.get("nombre") or [""])[0]
+            archivo = (consulta.get("archivo") or [""])[0]
+            reemplazar = (consulta.get("reemplazar") or [""])[0] or None
+            temp = app.raiz / "cache" / "subidas"
+            temp.mkdir(parents=True, exist_ok=True)
+            destino = temp / f"subida_{time.time_ns()}.bin"
+            try:
+                with open(destino, "wb") as f:                           # se guarda por trozos: un video no cabe en memoria
+                    restante = largo
+                    while restante > 0:
+                        trozo = self.rfile.read(min(1024 * 1024, restante))
+                        if not trozo:
+                            raise ErrorAccionable("La subida se cortó antes de terminar", "Vuelve a subir el archivo")
+                        f.write(trozo)
+                        restante -= len(trozo)
+                extension = Path(archivo).suffix
+                return self._json(logica.agregar_escenario(app.raiz, nombre or Path(archivo).stem, extension, destino, reemplazar))
+            finally:
+                destino.unlink(missing_ok=True)
+                try:
+                    temp.rmdir()
+                except OSError:
+                    pass
 
         def _generar_voz(self, d: dict) -> str:
             from src.cli import generar_voz
