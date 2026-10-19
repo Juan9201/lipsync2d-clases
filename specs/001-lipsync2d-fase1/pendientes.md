@@ -5,9 +5,9 @@ director con cámara virtual). Lo que sigue es lo que **todavía no está conect
 Plazo: 20 de diciembre de 2026 (quedan 65 días). Meta: 7.632 clases de 5 min.
 
 ## A. Bloqueantes para producir las 7.632 clases
-- [ ] **El lote no usa lo nuevo.** `src/lote/trabajadores.py::parametros_de` pasa una sola pose, sin director y con el reconocedor por
+- [x] **El lote no usa lo nuevo.** (HECHO 2026-10-19) `src/lote/trabajadores.py::parametros_de` pasa una sola pose, sin director y con el reconocedor por
   defecto. Un lote hoy rendería la primera pose, plano PL1, sin variedad. Conectar: poses de la clase, `director=True`, reglas y escenario.
-- [ ] **Idioma por clase (FR-021).** No hay columna `idioma` en el manifiesto ni elección automática del reconocedor (inglés →
+- [x] **Idioma por clase (FR-021).** (HECHO 2026-10-19; falta probar un render real en español) No hay columna `idioma` en el manifiesto ni elección automática del reconocedor (inglés →
   `pocketSphinx` con guion; español → `phonetic`). En esta sesión solo se probó audio en inglés (`tts_008.mp3`). Falta un render real en español.
 - [ ] **Lote de 20 clases reales (SC-004, T082).** Solo se midieron 4. Hacen falta 20 guiones (y audios o TTS) reales.
 - [ ] **TTS a escala.** ≈ 636 h de audio. La cuota diaria gratuita de Gemini TTS nunca se verificó; decidir cuándo pasar a pago, y plan B
@@ -28,7 +28,7 @@ Plazo: 20 de diciembre de 2026 (quedan 65 días). Meta: 7.632 clases de 5 min.
 - [ ] **Escenarios.** Solo hay uno real (`E2_calle`, video) y un placeholder (`E1_salon`, imagen). Para 7.632 clases, ¿cuántos fondos?
 - [ ] **Profesora.** `tts.yaml` tiene voz «mujer», pero no hay personaje femenino. ¿Un solo profesor para todo?
 - [ ] **3/4:** una sola variante de reposo por gesto (decidido provisionalmente).
-- [ ] **Interfaz web (Gradio, T083–T086).** Hoy todo es línea de comandos + las herramientas HTML. ¿Se hace, se recorta o se pospone?
+- [x] **Interfaz web (T083–T086).** (HECHO 2026-10-19: `python -m src.ui`; falta subir poses/escenarios) Hoy todo es línea de comandos + las herramientas HTML. ¿Se hace, se recorta o se pospone?
 
 ## C. Código y spec incompletos
 - [ ] Etiquetas manuales en el guion: T061–T064 (y la prioridad sobre el director, FR-091, que deja T068/T071 a medias).

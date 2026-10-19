@@ -79,6 +79,18 @@
         "8770"
       ],
       "port": 8770
+    },
+    {
+      "name": "interfaz",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "src.ui",
+        "--no-abrir",
+        "--puerto",
+        "8780"
+      ],
+      "port": 8780
     }
   ]
 }

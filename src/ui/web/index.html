@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lipsync 2D · clases</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header>
+  <h1>Lipsync 2D</h1>
+  <nav id="pestanas">
+    <button data-p="guiones" class="activa">Guiones y voz</button>
+    <button data-p="render">Render</button>
+    <button data-p="lote">Lote</button>
+  </nav>
+  <div id="chips"></div>
+  <a class="enlace" href="http://localhost:8770/editor/editor.html" target="_blank" rel="noopener">Editor de poses ↗</a>
+</header>
+<div id="aviso" hidden></div>
+
+<main>
+  <!-- ============ GUIONES Y VOZ ============ -->
+  <section id="p-guiones">
+    <div class="rejilla2">
+      <div class="panel">
+        <h2>Nueva clase</h2>
+        <textarea id="nuevo-texto" placeholder="Pega aquí el guion de la clase…" rows="7"></textarea>
+        <div class="fila">
+          <label>Número <input id="nuevo-id" placeholder="clase_0001" size="14"></label>
+          <label>Idioma <select id="nuevo-idioma"><option value="es">Español</option><option value="en">English</option><option value="mixto">Mixto</option></select></label>
+          <label>Voz <select id="nuevo-genero"><option value="hombre">Hombre</option><option value="mujer">Mujer</option></select></label>
+          <button id="btn-guardar" class="primario">Guardar clase</button>
+        </div>
+        <div class="fila sub">
+          <input type="file" id="archivos" accept=".txt,text/plain" multiple>
+          <button id="btn-importar">Importar archivos .txt</button>
+          <span class="nota">Un archivo = una clase; el nombre del archivo es su número.</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Voces</h2>
+        <div class="fila"><button id="btn-voces">Cargar las voces disponibles</button><span class="nota" id="voces-nota">Necesita gemini-tts-studio encendido.</span></div>
+        <div id="voces" class="voces"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Clases <span id="cuenta" class="nota"></span></h2>
+      <div class="fila opciones">
+        <label>Escenario <select id="op-escenario"><option value="">Automático (según la clase)</option></select></label>
+        <label>Plano inicial <select id="op-plano"><option value="">Según reglas</option><option>PL2</option><option>PL3</option><option>PL4</option><option>PL5</option></select></label>
+        <label class="check"><input type="checkbox" id="op-director" checked> Director (cambia poses y planos)</label>
+        <button id="btn-actualizar">Actualizar lista</button>
+      </div>
+      <table id="tabla-clases">
+        <thead><tr><th><input type="checkbox" id="marcar-todas" title="Marcar todas"></th><th>Clase</th><th>Idioma</th><th>Voz</th><th>Palabras</th><th>Audio</th><th>Video</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="nota" id="vacio" hidden>Todavía no hay clases. Pega un guion arriba o importa archivos .txt.</p>
+    </div>
+  </section>
+
+  <!-- ============ RENDER ============ -->
+  <section id="p-render" hidden>
+    <div class="rejilla2">
+      <div class="panel"><h2>Trabajos</h2><div id="tareas"></div><p class="nota" id="tareas-vacio">Aún no lanzaste nada en esta sesión.</p></div>
+      <div class="panel"><h2>Último video</h2><video id="visor" controls preload="metadata" hidden></video><p class="nota" id="visor-nota">Cuando termine un render aparecerá aquí.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ LOTE ============ -->
+  <section id="p-lote" hidden>
+    <div class="rejilla2">
+      <div class="panel">
+        <h2>Crear un lote</h2>
+        <p class="nota">Marca las clases en «Guiones y voz» y ponles nombre al lote. Las que no tengan voz la generan al correr.</p>
+        <div class="fila"><span id="lote-marcadas">0 clases marcadas</span></div>
+        <div class="fila"><label>Nombre del lote <input id="lote-nombre" size="16"></label><button id="btn-lote-crear" class="primario">Crear y encolar</button></div>
+      </div>
+      <div class="panel">
+        <h2>Correr</h2>
+        <div class="fila"><label>Trabajadores <select id="lote-trab"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
+          <button id="btn-lote-correr" class="primario">Correr la cola</button><button id="btn-lote-reintentar">Reintentar errores</button></div>
+        <p class="nota">Cada trabajador usa un núcleo del PC y ≈ 2 GB. Puedes cerrar esta página: la cola sigue mientras la ventana negra del lote esté abierta.</p>
+      </div>
+    </div>
+    <div class="panel"><h2>Estado de la cola <span id="lote-resumen" class="nota"></span></h2>
+      <table id="tabla-lote"><thead><tr><th>Clase</th><th>Lote</th><th>Estado</th><th>Resultado</th></tr></thead><tbody></tbody></table></div>
+  </section>
+</main>
+
+<dialog id="dlg-texto">
+  <h3 id="dlg-titulo"></h3>
+  <textarea id="dlg-area" rows="16"></textarea>
+  <div class="fila"><button id="dlg-guardar" class="primario">Guardar</button><button id="dlg-cerrar">Cerrar</button></div>
+</dialog>
+<script src="/app.js"></script>
+</body>
+</html>

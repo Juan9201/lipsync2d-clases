@@ -1,5 +1,6 @@
 @echo off
-rem Arranca todo el proyecto Lipsync 2D: la voz (gemini-tts-studio) y el Editor de poses, y abre el editor en el navegador.
+rem Arranca todo el proyecto Lipsync 2D: la interfaz (guiones, voces, render, lote), la voz (gemini-tts-studio) y el Editor de poses,
+rem y abre la interfaz en el navegador (desde ahi hay un enlace al Editor de poses).
 rem Cada servicio queda en su propia ventana; cierra esa ventana para apagarlo.
 setlocal
 set "PROYECTO=%~dp0"
@@ -37,7 +38,16 @@ if errorlevel 1 (
   echo gemini-tts-studio ya estaba encendido.
 )
 
-echo Abriendo el editor en el navegador...
-timeout /t 3 /nobreak >nul
-start "" "http://localhost:8770/editor/editor.html"
+rem --- Interfaz del proyecto (puerto 8780): guiones, voces, render y lote ---
+netstat -ano | findstr /R /C:":8780 .*LISTENING" >nul
+if errorlevel 1 (
+  echo Arrancando la interfaz del proyecto...
+  start "Interfaz del proyecto (puerto 8780)" /D "%PROYECTO%" "%PY%" -m src.ui --no-abrir --puerto 8780
+) else (
+  echo La interfaz ya estaba encendida.
+)
+
+echo Abriendo la interfaz en el navegador...
+timeout /t 4 /nobreak >nul
+start "" "http://localhost:8780/"
 endlocal

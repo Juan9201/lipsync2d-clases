@@ -19,9 +19,9 @@ gemini-studio:
   idiomas:                        # voz e idioma propios de cada idioma de clase (columna «idioma» del manifiesto)
     en:
       idioma: en-US
-      voces:                      # ids SIN VERIFICAR: elígelos en la pantalla de voces (python -m src.ui)
-        hombre: en-US-podcaster-3
-        mujer: en-US-podcaster-2
+      voces:                      # ids del catálogo (en minúsculas); cámbialos en la pantalla de voces (python -m src.ui)
+        hombre: en-us-podcaster-4
+        mujer: en-us-podcaster-2
 
 edge:
   voces:                          # voces multilingües: leen bien español e inglés mezclados

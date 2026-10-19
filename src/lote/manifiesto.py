@@ -9,7 +9,7 @@ from typing import List, Tuple
 from src.errores import ErrorAccionable
 from src.lote.cola import Cola, Trabajo
 
-COLUMNAS = ["id", "guion", "audio", "personaje", "escenarios", "poses", "resolucion", "semilla", "tts", "idioma", "lote"]
+COLUMNAS = ["id", "guion", "audio", "personaje", "escenarios", "poses", "resolucion", "semilla", "tts", "genero", "idioma", "lote"]
 IDIOMAS = ("es", "en", "mixto")
 RESOLUCIONES = ("1280x720", "1920x1080")
 ID_VALIDO = re.compile(r"^[\w\-]+$", re.UNICODE)
@@ -42,9 +42,21 @@ def crear_manifiesto(carpeta: Path, personaje: str, lote: str, destino: Path,
                 inf.sin_guion.append(id_clase)
             w.writerow({"id": id_clase, "guion": str(guiones.get(id_clase, "")), "audio": str(audios.get(id_clase, "")),
                         "personaje": personaje, "escenarios": escenarios, "poses": poses,
-                        "resolucion": "1280x720", "semilla": "", "tts": "gemini-studio", "idioma": idioma, "lote": lote})
+                        "resolucion": "1280x720", "semilla": "", "tts": "gemini-studio", "genero": "", "idioma": idioma, "lote": lote})
             inf.filas += 1
     return inf
+
+
+def escribir_manifiesto(filas: List[dict], destino: Path) -> Path:
+    """Escribe un manifiesto con las columnas estándar a partir de filas ya armadas (por ejemplo desde la interfaz)."""
+    destino = Path(destino)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with open(destino, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=COLUMNAS, extrasaction="ignore")
+        w.writeheader()
+        for fila in filas:
+            w.writerow({c: fila.get(c, "") for c in COLUMNAS})
+    return destino
 
 
 def _existe(ruta: str, raiz: Path) -> bool:

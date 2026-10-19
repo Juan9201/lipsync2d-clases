@@ -22,11 +22,23 @@ VOCES_DEFECTO = {
     "edge": {"hombre": "en-US-AndrewMultilingualNeural", "mujer": "en-US-AvaMultilingualNeural"},
 }
 
+def _fusionar(base: dict, encima: dict) -> dict:
+    for k, v in encima.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _fusionar(base[k], v)
+        else:
+            base[k] = v
+    return base
+
+
 def _config(raiz: Path) -> dict:
-    ruta = Path(raiz) / "tts.yaml"
-    if not ruta.is_file():
-        return {}
-    return yaml.safe_load(ruta.read_text(encoding="utf-8")) or {}
+    """tts.yaml con encima lo que se eligió en la interfaz (tts_usuario.yaml), que manda sin tocar el original."""
+    config: dict = {}
+    for nombre in ("tts.yaml", "tts_usuario.yaml"):
+        ruta = Path(raiz) / nombre
+        if ruta.is_file():
+            _fusionar(config, yaml.safe_load(ruta.read_text(encoding="utf-8")) or {})
+    return config
 
 
 def obtener_proveedor(nombre: str, raiz: Path = rutas.RAIZ, genero: Optional[str] = None,
