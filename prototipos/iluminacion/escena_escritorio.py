@@ -125,19 +125,22 @@ def aplicar_luz(pj: Image.Image, mult: np.ndarray, suma: np.ndarray, caja=None) 
     return Image.fromarray((np.dstack([lit, alfa]) * 255).astype(np.uint8), "RGBA")
 
 
-def mapas_de_luz(pj: Image.Image):
+def mapas_de_luz(pj: Image.Image, luces=None, ambiente=None, y_borde=None, rampa=95.0, suavidad=22.0):
     """(multiplicador de color, reborde aditivo) por píxel; dependen de la silueta y de las luces, no de la cara que cambie."""
+    luces = LUCES if luces is None else luces
+    ambiente = AMBIENTE if ambiente is None else ambiente
+    y_borde = Y_BORDE_MESA if y_borde is None else y_borde
     arr = np.asarray(pj, dtype=np.float32) / 255.0
     alb, alfa = arr[..., :3], arr[..., 3]
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     # relieve falso: la silueta suavizada hace de «volumen»; su gradiente da la orientación del contorno
     masc = Image.fromarray((alfa * 255).astype(np.uint8))
-    altura = np.asarray(masc.filter(ImageFilter.GaussianBlur(22)), dtype=np.float32) / 255.0
+    altura = np.asarray(masc.filter(ImageFilter.GaussianBlur(suavidad)), dtype=np.float32) / 255.0
     gy, gx = np.gradient(altura)
     n = np.stack([-gx * 14, -gy * 14, np.ones_like(gx)], -1)
     n /= np.linalg.norm(n, axis=-1, keepdims=True)
-    luz_total = np.zeros((H, W, 3), np.float32) + AMBIENTE
-    for L in LUCES:
+    luz_total = np.zeros((H, W, 3), np.float32) + ambiente
+    for L in luces:
         lx, ly = L["pos"]
         v = np.stack([lx - xx, ly - yy, np.full_like(xx, L["altura"])], -1)
         dist = np.linalg.norm(v, axis=-1, keepdims=True)
@@ -146,7 +149,7 @@ def mapas_de_luz(pj: Image.Image):
         caida = np.exp(-(dist[..., 0] ** 2) / (2 * (L["alcance"]) ** 2))[..., None]
         luz_total += np.array(L["color"], np.float32) * L["fuerza"] * caida * (0.25 + 0.75 * difusa)
     # oclusión de la mesa: lo que está cerca del borde de la mesa recibe menos luz
-    oclusion = 1 - 0.42 * np.clip((yy - (Y_BORDE_MESA - 95)) / 95.0, 0, 1)
+    oclusion = 1 - 0.42 * np.clip((yy - (y_borde - rampa)) / rampa, 0, 1)
     luz_total *= oclusion[..., None]
     # la luz cambia sobre todo el brillo; su color se aplica a medias para que la piel y la ropa no se ensucien
     brillo_luz = (luz_total * np.array([0.30, 0.59, 0.11])).sum(-1, keepdims=True)
@@ -156,7 +159,7 @@ def mapas_de_luz(pj: Image.Image):
     borde = np.asarray(masc.filter(ImageFilter.GaussianBlur(4.5)), dtype=np.float32) / 255.0
     interior = np.asarray(masc.filter(ImageFilter.GaussianBlur(1.0)), dtype=np.float32) / 255.0
     contorno = np.clip(interior - borde, 0, 1) * 3.5 * (alfa > 0.5)
-    mira_luz = np.clip(sum(((np.stack([L["pos"][0] - xx, L["pos"][1] - yy], -1) / np.maximum(np.linalg.norm(np.stack([L["pos"][0] - xx, L["pos"][1] - yy], -1), axis=-1, keepdims=True), 1e-3)) * n[..., :2]).sum(-1) * L["fuerza"] * np.exp(-((xx - L["pos"][0]) ** 2 + (yy - L["pos"][1]) ** 2) / (2 * (L["alcance"] * 1.2) ** 2)) for L in LUCES), 0, None)
+    mira_luz = np.clip(sum(((np.stack([L["pos"][0] - xx, L["pos"][1] - yy], -1) / np.maximum(np.linalg.norm(np.stack([L["pos"][0] - xx, L["pos"][1] - yy], -1), axis=-1, keepdims=True), 1e-3)) * n[..., :2]).sum(-1) * L["fuerza"] * np.exp(-((xx - L["pos"][0]) ** 2 + (yy - L["pos"][1]) ** 2) / (2 * (L["alcance"] * 1.2) ** 2)) for L in luces), 0, None)
     suma = np.array([1.0, 0.82, 0.58], np.float32) * (contorno * np.clip(mira_luz, 0, 1.2) * 0.38)[..., None]
     return mult.astype(np.float32), suma.astype(np.float32)
 
