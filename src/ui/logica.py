@@ -3,6 +3,7 @@ traduce peticiones a estas funciones, así se prueban sin navegador.
 
 Los guiones viven en `clases/<id>.txt` con sus ajustes (idioma, género de la voz, escenarios y poses permitidos) en
 `clases/<id>.json`. Las voces que eliges se guardan en `tts_usuario.yaml`, que manda sobre `tts.yaml` sin tocarlo."""
+import dataclasses
 import json
 import re
 import shutil
@@ -260,7 +261,7 @@ def muestra_de_voz(raiz: Path, idioma: str, genero: str, voz: Optional[str] = No
     idioma_voz = "en" if idioma == "en" else "es"
     proveedor, opciones = obtener_proveedor("gemini-studio", Path(raiz), genero, idioma_voz)
     if voz:
-        opciones.voz = voz
+        opciones = dataclasses.replace(opciones, voz=voz)          # OpcionesTTS es inmutable
     destino = Path(raiz) / "cache" / "muestras" / f"{idioma_voz}_{genero}_{re.sub(r'[^A-Za-z0-9_-]+', '_', opciones.voz or 'defecto')}.mp3"
     if not destino.is_file():
         sintetizar_texto(proveedor, texto or TEXTO_MUESTRA[idioma_voz], destino, opciones)

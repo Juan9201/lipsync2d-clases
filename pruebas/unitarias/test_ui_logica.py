@@ -199,3 +199,24 @@ def test_render_y_lote_de_una_clase_inexistente_dan_un_error_claro_no_un_fallo(p
     assert "No existe la clase" in str(e1.value)
     with pytest.raises(ErrorAccionable):
         logica.crear_lote(proyecto_tmp, "L1", ["no_existe"])
+
+
+def test_escuchar_una_voz_elegida_genera_la_muestra_con_esa_voz(proyecto_tmp, monkeypatch):
+    """Regresión: elegir una voz del catálogo y pulsar «Escuchar» fallaba con FrozenInstanceError."""
+    from src.tts.base import OpcionesTTS
+    usadas = []
+
+    def falso_sintetizar(proveedor, texto, destino, opciones):
+        usadas.append((opciones.voz, texto))
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(b"mp3")
+        return destino
+    monkeypatch.setattr("src.tts.obtener_proveedor", lambda nombre, raiz=None, genero=None, idioma=None: (object(), OpcionesTTS(voz="es-original")))
+    monkeypatch.setattr("src.tts.comun.sintetizar_texto", falso_sintetizar)
+    ruta = logica.muestra_de_voz(proyecto_tmp, "es", "hombre", "es-419-podcaster-8")
+    assert ruta.is_file() and ruta.name == "es_hombre_es-419-podcaster-8.mp3"
+    assert usadas == [("es-419-podcaster-8", logica.TEXTO_MUESTRA["es"])]
+    logica.muestra_de_voz(proyecto_tmp, "es", "hombre", "es-419-podcaster-8")
+    assert len(usadas) == 1                                          # la muestra ya existe: no se vuelve a generar
+    logica.muestra_de_voz(proyecto_tmp, "en", "mujer")
+    assert usadas[-1][0] == "es-original"                            # sin voz elegida usa la guardada
