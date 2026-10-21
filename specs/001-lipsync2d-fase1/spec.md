@@ -20,8 +20,11 @@ escenarios y con variedad de poses y planos fotográficos. Las soluciones probad
 inestables. La solución usa animación 2D por visemas (formas de boca dibujadas), sin
 IA generativa para la boca.
 
-**Meta de producción:** 7.632 clases de 5 minutos (≈ 636 horas de video). Primer hito
-de escala: 500 clases.
+**Meta de producción (corregida 2026-10-21):** 480 clases con el personaje animado, de 5 minutos (≈ 40 horas de video). Son
+las 3 clases «IA» de cada uno de los 160 módulos (4 niveles A1–B2 × 40 módulos); la primera clase de cada módulo la da una
+persona y no se renderiza. Las 7.632 «actividades» del curso incluyen además quices y examen en H5P y la clase de conclusión
+(Google Vids), que no son de este proyecto. La cifra anterior (7.632 clases, ≈ 636 h) era un malentendido.
+Guiones: 640 (160 por nivel, 4 por módulo); se renderizan los subtemas 2.º–4.º de cada módulo.
 
 **Modelo "estudio de animación":** el usuario crea una vez una biblioteca de poses del
 personaje y una biblioteca de escenarios; el sistema solo anima, compone y sincroniza
@@ -336,10 +339,10 @@ Cada historia se puede probar por separado.
   hacer para corregirlo.
 - **NFR-007 (Rendimiento en lote):** en el equipo de referencia, el tiempo efectivo
   medio es ≤ 2 minutos por clase de 5 minutos a 1280×720 con los trabajadores en
-  paralelo (equivale a ≈ 11 días continuos para 7.632 clases). Es una meta; se valida
+  paralelo (equivale a ≈ 16 horas continuas para 480 clases). Es una meta; se valida
   con mediciones en la Fase 3.
 - **NFR-008 (Espacio):** el MP4 de una clase de 5 minutos a 1280×720 pesa en promedio
-  ≤ 60 MB, de modo que 7.632 clases caben en ≤ 460 GB, dentro de los 700 GB libres.
+  ≤ 60 MB, de modo que 480 clases caben en ≤ 30 GB, muy por debajo de los 700 GB libres.
 - **NFR-009 (Robustez de lote):** la memoria total con N trabajadores es N × el límite
   de NFR-001 y no crece durante el lote.
 
@@ -503,7 +506,7 @@ También quedan fuera de la Fase 1:
   fallos aislados reportados.
 - **SC-005:** un lote de 500 clases se completa en ≤ 20 horas continuas en el equipo
   de referencia.
-- **SC-006 (plazo):** las 7.632 clases de 5 minutos están renderizadas y entregadas a
+- **SC-006 (plazo):** las 480 clases de 5 minutos están renderizadas y entregadas a
   más tardar el 20 de diciembre de 2026.
 - **SC-007 (v3):** una clase de 5 minutos con fondo en video, cambios de pose, parpadeo y
   variantes de reposo se completa en ≤ 2 minutos efectivos por clase (el prototipo sin

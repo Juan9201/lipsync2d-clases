@@ -2,15 +2,15 @@
 
 Estado: 81 de 108 tareas de `tasks.md` marcadas; el pipeline de una clase funciona de punta a punta (voz, lipsync, 43 poses, parpadeo,
 director con cámara virtual). Lo que sigue es lo que **todavía no está conectado, no se ha medido o necesita una decisión**.
-Plazo: 20 de diciembre de 2026 (quedan 65 días). Meta: 7.632 clases de 5 min.
+Plazo: 20 de diciembre de 2026 (quedan 65 días). Meta (corregida 2026-10-21): 480 clases de 5 min (3 «IA» × 160 módulos; ver spec).
 
-## A. Bloqueantes para producir las 7.632 clases
+## A. Bloqueantes para producir las 480 clases
 - [x] **El lote no usa lo nuevo.** (HECHO 2026-10-19) `src/lote/trabajadores.py::parametros_de` pasa una sola pose, sin director y con el reconocedor por
   defecto. Un lote hoy rendería la primera pose, plano PL1, sin variedad. Conectar: poses de la clase, `director=True`, reglas y escenario.
 - [x] **Idioma por clase (FR-021).** (HECHO 2026-10-19; falta probar un render real en español) No hay columna `idioma` en el manifiesto ni elección automática del reconocedor (inglés →
   `pocketSphinx` con guion; español → `phonetic`). En esta sesión solo se probó audio en inglés (`tts_008.mp3`). Falta un render real en español.
 - [ ] **Lote de 20 clases reales (SC-004, T082).** Solo se midieron 4. Hacen falta 20 guiones (y audios o TTS) reales.
-- [ ] **TTS a escala.** ≈ 636 h de audio. La cuota diaria gratuita de Gemini TTS nunca se verificó; decidir cuándo pasar a pago, y plan B
+- [ ] **TTS a escala.** ≈ 40 h de audio. La cuota diaria gratuita de Gemini TTS nunca se verificó; decidir cuándo pasar a pago, y plan B
   (`edge`). La clave de API vive en la otra webapp (`gemini-tts-studio/.env`): no copiarla a este repo (es público).
 - [ ] **Rendimiento (NFR-007/SC-007, T091/T106).** Con director y parpadeo: 240 s por clase con 1 trabajador (0,86× tiempo real); el
   prototipo sin esto midió ≈ 60 s. A ese ritmo: ≈ 21 días continuos con 1 trabajador, ≈ 7–10 con 3. Perfil de 90 s: 56 % esperando al
@@ -25,7 +25,7 @@ Plazo: 20 de diciembre de 2026 (quedan 65 días). Meta: 7.632 clases de 5 min.
 - [ ] **`Frontal_Blink_Middle` sin corrección de color** (el cerrado sí la tiene).
 - [ ] **FR-061 relajado** (bocas de distinto tamaño con calibración por forma): propuesto, sin tu OK.
 - [ ] **Cejas «amigables» (prompt ya hecho).** Regenerar cabezas obliga a recalibrar y reimportar todo.
-- [ ] **Escenarios.** Solo hay uno real (`E2_calle`, video) y un placeholder (`E1_salon`, imagen). Para 7.632 clases, ¿cuántos fondos?
+- [ ] **Escenarios.** Solo hay uno real (`E2_calle`, video) y un placeholder (`E1_salon`, imagen). Para 480 clases, ¿cuántos fondos?
 - [ ] **Profesora.** `tts.yaml` tiene voz «mujer», pero no hay personaje femenino. ¿Un solo profesor para todo?
 - [ ] **3/4:** una sola variante de reposo por gesto (decidido provisionalmente).
 - [x] **Interfaz web (T083–T086).** (HECHO 2026-10-19: `python -m src.ui`; falta subir poses/escenarios) Hoy todo es línea de comandos + las herramientas HTML. ¿Se hace, se recorta o se pospone?
