@@ -15,15 +15,26 @@ var MODELO = 'gemini-3.1-pro-preview';
 var CARPETA_RAIZ = 'Guiones';              // dentro de Mi unidad
 var NIVELES = ['A1', 'A2', 'B1', 'B2'];
 var LOTE = 5;                              // clases por ejecución
-var MIN_PAL = 720, MAX_PAL = 880;          // palabras habladas aceptables (objetivo 800 = ~5 min)
+var MIN_PAL = 700, MAX_PAL = 900;          // palabras habladas aceptables (objetivo 800 = ~5 min)
 var MAX_INTENTOS = 3;
 var ESPERA_NORMAL_MS = 60 * 1000;
 var ESPERA_ERROR_MS = 5 * 60 * 1000;
+var SEGURIDAD_MS = 8 * 60 * 1000;           // disparo de rescate por si una ejecución muere a medias
 
 // ------------------------------------------------------------------ arranque
-function iniciar() {
+// iniciar()        -> genera todo lo que falte, A1 -> A2 -> B1 -> B2, hasta terminar.
+// iniciarPrueba()  -> genera solo 20 clases y se detiene: para revisar antes de gastar más.
+// detener()        -> lo para. estado() -> cuántas hay hechas y pendientes.
+function iniciar() { arrancar_(0); }
+function iniciarPrueba() { arrancar_(20); }
+
+function arrancar_(tope) {
   borrarTriggers_();
-  PropertiesService.getScriptProperties().deleteProperty('ERRORES');
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('ERRORES');
+  props.deleteProperty('SEGUIDOS_ERR');
+  props.setProperty('TOPE', String(tope));
+  props.setProperty('CREADAS', '0');
   tick();
 }
 
@@ -51,8 +62,17 @@ function tick() {
   var espera = ESPERA_NORMAL_MS;
   try {
     borrarTriggers_();
+    // Red de seguridad: si esta ejecución muere por tiempo, este disparo retoma el trabajo (se reemplaza al terminar).
+    ScriptApp.newTrigger('tick').timeBased().after(SEGURIDAD_MS).create();
     var props = PropertiesService.getScriptProperties();
     var abandonadas = JSON.parse(props.getProperty('ERRORES') || '[]');
+    var tope = parseInt(props.getProperty('TOPE'), 10) || 0;
+    var creadas = parseInt(props.getProperty('CREADAS'), 10) || 0;
+    if (tope && creadas >= tope) {
+      Logger.log('Prueba terminada: ' + creadas + ' clases nuevas. Revísalas y ejecuta iniciar() para seguir.');
+      borrarTriggers_();
+      return;
+    }
     var pendientes = null;
     for (var k = 0; k < NIVELES.length && !pendientes; k++) {
       var nivel = NIVELES[k];
@@ -62,9 +82,10 @@ function tick() {
     }
     if (!pendientes) {
       Logger.log('PROCESO COMPLETADO. Abandonadas: ' + (abandonadas.length ? abandonadas.join(', ') : 'ninguna'));
+      borrarTriggers_();
       return;
     }
-    var lote = pendientes.lista.slice(0, LOTE);
+    var lote = pendientes.lista.slice(0, tope ? Math.min(LOTE, tope - creadas) : LOTE);
     var carpeta = carpetaDe_(pendientes.nivel);
     var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELO + ':generateContent';
     var cabeceras = { 'x-goog-api-key': clave_() };
@@ -77,39 +98,67 @@ function tick() {
       };
     });
     var respuestas = UrlFetchApp.fetchAll(peticiones);
+    var transitorios = 0, fatal = '';
     for (var j = 0; j < respuestas.length; j++) {
       var f = lote[j];
       var codigo = respuestas[j].getResponseCode();
       var texto = '', motivo = '';
-      if (codigo === 200) {
-        try {
-          var json = JSON.parse(respuestas[j].getContentText());
-          var partes = (json.candidates && json.candidates[0] && json.candidates[0].content.parts) || [];
-          texto = partes.map(function (p) { return p.text || ''; }).join('').trim();
-          motivo = (json.candidates && json.candidates[0] && json.candidates[0].finishReason) || '?';
-        } catch (e) { texto = ''; }
-      } else if (codigo === 429 || codigo >= 500) {
+      if (codigo === 429 || codigo >= 500) {            // cuota o servidor saturado: no cuenta como intento, se espera
+        transitorios++;
         espera = ESPERA_ERROR_MS;
+        Logger.log('Saturación/cuota (HTTP ' + codigo + ') en ' + f.id + ': se reintenta más tarde');
+        continue;
       }
+      if (codigo !== 200) {                              // 400/401/403/404: clave, saldo o modelo mal; seguir solo gasta
+        fatal = 'HTTP ' + codigo + ' en ' + f.id + ': ' + respuestas[j].getContentText().substring(0, 250);
+        continue;
+      }
+      try {
+        var json = JSON.parse(respuestas[j].getContentText());
+        var partes = (json.candidates && json.candidates[0] && json.candidates[0].content.parts) || [];
+        texto = limpiar_(partes.map(function (p) { return p.text || ''; }).join(''));
+        motivo = (json.candidates && json.candidates[0] && json.candidates[0].finishReason) || '?';
+      } catch (e) { texto = ''; }
       var intentos = (parseInt(props.getProperty('INT_' + f.id), 10) || 0) + 1;
       var palabras = contarPalabras_(texto);
       var buena = texto && palabras >= MIN_PAL && palabras <= MAX_PAL;
       if (buena || (texto && intentos >= MAX_INTENTOS)) {
         guardar_(carpeta, f, texto, !buena, palabras);
         props.deleteProperty('INT_' + f.id);
+        creadas++;
+        props.setProperty('CREADAS', String(creadas));
       } else if (intentos >= MAX_INTENTOS) {
         abandonadas.push(f.id);
         props.setProperty('ERRORES', JSON.stringify(abandonadas));
-        Logger.log('ABANDONADA ' + f.id + ' (HTTP ' + codigo + ')');
+        Logger.log('ABANDONADA ' + f.id + ' (sin texto, fin: ' + motivo + ')');
       } else {
         props.setProperty('INT_' + f.id, String(intentos));
-        Logger.log('Reintento ' + f.id + ' (HTTP ' + codigo + ', ' + palabras + ' palabras, fin: ' + motivo + ', intento ' + intentos + ')');
+        Logger.log('Reintento ' + f.id + ' (' + palabras + ' palabras, fin: ' + motivo + ', intento ' + intentos + ')');
       }
     }
+    if (fatal) {
+      Logger.log('DETENIDO por error que no se arregla reintentando -> ' + fatal);
+      borrarTriggers_();
+      return;
+    }
+    // Si TODO el lote fue saturación/cuota durante ~1 hora seguida (p. ej. sin saldo), se para en vez de insistir.
+    var seguidos = transitorios === respuestas.length ? (parseInt(props.getProperty('SEGUIDOS_ERR'), 10) || 0) + 1 : 0;
+    props.setProperty('SEGUIDOS_ERR', String(seguidos));
+    if (seguidos >= 12) {
+      Logger.log('DETENIDO: 12 lotes seguidos sin respuesta (¿sin saldo o cuota agotada?). Revisa y ejecuta iniciar().');
+      borrarTriggers_();
+      return;
+    }
+    borrarTriggers_();
     ScriptApp.newTrigger('tick').timeBased().after(espera).create();
   } finally {
     cerrojo.releaseLock();
   }
+}
+
+// Quita restos de formato que la voz leería ("**", "#") y espacios de sobra.
+function limpiar_(texto) {
+  return texto.replace(/\*\*/g, '').replace(/^#+\s*/gm, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 // ------------------------------------------------------------------ hoja y Drive
