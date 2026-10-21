@@ -104,9 +104,14 @@ function tick() {
       var codigo = respuestas[j].getResponseCode();
       var texto = '', motivo = '';
       if (codigo === 429 || codigo >= 500) {            // cuota o servidor saturado: no cuenta como intento, se espera
+        var cuerpo = respuestas[j].getContentText();
+        Logger.log('Saturación/cuota (HTTP ' + codigo + ') en ' + f.id + ': ' + cuerpo.replace(/\s+/g, ' ').substring(0, 280));
+        if (/per.?day|daily|prepay|credit|billing|depleted|spending cap|spend cap/i.test(cuerpo)) {   // no se arregla esperando minutos
+          fatal = 'Cuota diaria, saldo o tope de gasto agotado (ver mensaje de arriba). La cuota diaria se renueva a medianoche (hora del Pacífico = 2 AM en Colombia).';
+          continue;
+        }
         transitorios++;
         espera = ESPERA_ERROR_MS;
-        Logger.log('Saturación/cuota (HTTP ' + codigo + ') en ' + f.id + ': se reintenta más tarde');
         continue;
       }
       if (codigo !== 200) {                              // 400/401/403/404: clave, saldo o modelo mal; seguir solo gasta
