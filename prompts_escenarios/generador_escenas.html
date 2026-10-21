@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generador de prompts · escenarios</title>
+<style>
+  :root { --bg:#14161a; --panel:#1e2127; --borde:#343942; --texto:#e8eaed; --suave:#9aa3ad; --acento:#4cc2ff; --ok:#6fd08c; --aviso:#ffcf70; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--texto); font:15px/1.5 system-ui,Segoe UI,sans-serif; }
+  header { padding:14px 18px; border-bottom:1px solid var(--borde); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  .insignia { background:#12324a; color:var(--acento); border:1px solid #1d5a85; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:700; }
+  main { max-width:1180px; margin:0 auto; padding:16px; display:grid; grid-template-columns: 380px minmax(0,1fr); gap:16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--borde); border-radius:10px; padding:14px; margin-bottom:14px; }
+  .panel h2 { font-size:12px; margin:0 0 10px; color:var(--suave); font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+  label.opcion { display:flex; gap:10px; align-items:flex-start; padding:8px 10px; border:1px solid var(--borde); border-radius:8px; margin-bottom:8px; cursor:pointer; }
+  label.opcion:hover { border-color:var(--acento); }
+  label.opcion.sel { border-color:var(--acento); background:#162b3b; }
+  label.opcion small { display:block; color:var(--suave); }
+  label.casilla { display:flex; gap:8px; align-items:flex-start; padding:3px 2px; cursor:pointer; }
+  label.casilla small { color:var(--suave); }
+  .dos { display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; }
+  select { width:100%; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:6px; padding:8px; font:inherit; }
+  .campo { margin-bottom:10px; }
+  .campo > span { display:block; color:var(--suave); font-size:12px; margin-bottom:3px; }
+  textarea { width:100%; height:330px; background:#111317; color:var(--texto); border:1px solid var(--borde); border-radius:8px; padding:12px; font:13px/1.5 ui-monospace,Consolas,monospace; resize:vertical; }
+  textarea.corta { height:140px; }
+  button { background:var(--acento); color:#001018; border:0; border-radius:8px; padding:10px 16px; cursor:pointer; font:inherit; font-weight:700; }
+  button.sec { background:#272b33; color:var(--texto); border:1px solid var(--borde); font-weight:500; }
+  .fila { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .nota { color:var(--suave); font-size:13px; }
+  .ok { color:var(--ok); }
+  .aviso { color:var(--aviso); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td { padding:5px 6px; border-bottom:1px solid var(--borde); vertical-align:top; }
+  td:first-child { color:var(--suave); width:34%; }
+  details summary { cursor:pointer; color:var(--suave); font-size:13px; }
+  .chip { display:inline-block; font-size:11px; border-radius:999px; padding:1px 8px; margin-left:6px; border:1px solid var(--borde); color:var(--suave); }
+  .chip.hecho { color:var(--ok); border-color:#2d5b3b; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Generador de prompts para Higgsfield · escenarios</h1>
+  <span class="insignia">Aula · Casa · Oficina · Calle · Tienda/café</span>
+</header>
+<main>
+  <section>
+    <div class="panel">
+      <h2>1 · Escenario</h2>
+      <div id="escenas"></div>
+    </div>
+    <div class="panel">
+      <h2>2 · Qué vas a generar</h2>
+      <label class="opcion" data-m="completa"><input type="radio" name="modo" value="completa" checked>
+        <span><b>Escena completa</b> (paso 1)<small>Fondo + mesa juntos. Elige la mejor y úsala como referencia en los pasos 2 y 3.</small></span></label>
+      <label class="opcion" data-m="back"><input type="radio" name="modo" value="back">
+        <span><b>BACK</b> (paso 2)<small>La misma imagen sin la mesa ni lo que va delante.</small></span></label>
+      <label class="opcion" data-m="front"><input type="radio" name="modo" value="front">
+        <span><b>FRONT</b> (paso 3)<small>Solo la mesa sobre verde puro; luego se quita el verde.</small></span></label>
+    </div>
+    <div class="panel" id="panelFondo">
+      <h2>3 · Qué lleva el fondo</h2>
+      <div id="listaFondo"></div>
+    </div>
+    <div class="panel" id="panelFrente">
+      <h2 id="tituloFrente">4 · Qué lleva la mesa</h2>
+      <div id="listaFrente"></div>
+    </div>
+    <div class="panel" id="panelLuz">
+      <h2>5 · Luz y composición</h2>
+      <div class="campo"><span>Luz desde</span><select id="luzLado"><option value="left">la izquierda</option><option value="right">la derecha</option></select></div>
+      <div class="campo"><span>Hora / clima</span><select id="hora"></select></div>
+      <div class="campo"><span>El profesor irá en la mitad…</span><select id="profLado"><option value="right">derecha (como ahora)</option><option value="left">izquierda</option></select></div>
+      <label class="casilla"><input type="checkbox" id="optZona" checked><span>Dejar despejada la zona del profesor <small>(sin objetos altos ni mucho contraste ahí)</small></span></label>
+      <label class="casilla" id="filaEstilo"><input type="checkbox" id="optEstilo" checked><span>Incluir el bloque de estilo <small>(el mismo dibujo que el profesor)</small></span></label>
+      <label class="casilla" id="filaNeg"><input type="checkbox" id="optNeg" checked><span>Sin personas, texto ni logos</span></label>
+      <label class="casilla" id="filaRes"><input type="checkbox" id="optRes" checked><span>Resolución 3840×2160 <small>(si la quitas: 1920×1080)</small></span></label>
+    </div>
+    <div class="panel">
+      <h2>Avance de esta escena</h2>
+      <label class="casilla"><input type="checkbox" data-av="completa"><span>Escena completa elegida</span></label>
+      <label class="casilla"><input type="checkbox" data-av="back"><span>BACK listo</span></label>
+      <label class="casilla"><input type="checkbox" data-av="front"><span>FRONT listo (con transparencia)</span></label>
+      <label class="casilla"><input type="checkbox" data-av="subida"><span>Subidos a la interfaz</span></label>
+      <label class="casilla"><input type="checkbox" data-av="aprobada"><span>Encuadre aprobado</span></label>
+    </div>
+  </section>
+
+  <section>
+    <div class="panel">
+      <h2>Ajustes en Higgsfield</h2>
+      <table id="ajustes"></table>
+    </div>
+    <div class="panel">
+      <h2>Prompt <span id="chipEditado" class="chip" style="display:none">editado a mano</span></h2>
+      <textarea id="prompt" spellcheck="false"></textarea>
+      <div class="fila">
+        <button id="copiar">Copiar prompt</button>
+        <button id="restaurar" class="sec">Restaurar automático</button>
+        <span id="estado" class="nota"></span>
+      </div>
+      <div class="nota" style="margin-top:8px">Las casillas de la izquierda regeneran el prompt. Si lo editas a mano, tus cambios se guardan para este escenario y paso; «Restaurar automático» los descarta.</div>
+    </div>
+    <div class="panel">
+      <h2>Al recibir la imagen</h2>
+      <div class="nota" id="siguiente"></div>
+    </div>
+    <div class="panel">
+      <details>
+        <summary>Bloque de estilo (editable; se aplica a los cinco escenarios)</summary>
+        <div class="campo" style="margin-top:10px"><textarea id="estiloTexto" class="corta" spellcheck="false"></textarea></div>
+        <div class="fila"><button id="estiloRestaurar" class="sec">Restaurar el estilo original</button></div>
+      </details>
+    </div>
+  </section>
+</main>
+
+<script>
+const ESTILO_BASE = `2D cel-shaded illustration in the style of a modern western animated series / graphic novel. Clean medium-weight dark ink outlines around every object, flat colors with soft two-tone shading and subtle highlights, slightly hand-painted texture. Natural saturated but not neon colors, bright soft daylight, gentle ambient occlusion. NOT photorealistic, NOT 3D render, NO glow effects, NO neon, NO blurry photo background. Camera at chest height, slight depth.`;
+
+const HORAS = [
+  { id: "manana", n: "Mañana, luz blanca y limpia", t: "bright clean morning daylight" },
+  { id: "tarde", n: "Tarde, luz cálida", t: "warm late-afternoon sunlight" },
+  { id: "mediodia", n: "Mediodía soleado", t: "clear sunny midday light" },
+  { id: "nublado", n: "Nublado, luz suave", t: "soft overcast daylight" }
+];
+
+// on: viene marcado por defecto. {L} = lado de la luz.
+const ESCENAS = {
+  aula: { n: "Aula con pizarra", mod: "alfabeto, pronombres, números, días, verbos, preguntas", base: "A bright modern classroom", suelo: "wooden floor", pared: "a plain light wall and part of the whiteboard",
+    frente: { n: "wooden teacher's desk", ancho: "across the bottom of the frame" },
+    fondo: [
+      ["ventana", "a large window with daylight on the {L} wall and a few green plants on the sill", 1],
+      ["pizarra", "a large clean white whiteboard on the back wall (completely blank, no writing) with a marker tray", 1],
+      ["mapa", "a framed world map", 1], ["carteles", "two colorful abstract posters", 1],
+      ["estante", "a bookshelf with colorful books in a far corner", 1], ["sillas", "a few student chairs stacked neatly", 1],
+      ["suelo", "a wooden floor", 1], ["reloj", "a round wall clock", 0], ["luz", "a ceiling light panel", 0]],
+    props: [["libros", "a neat stack of books", 1], ["taza", "a mug", 1], ["planta", "a small potted plant", 1], ["lapices", "a pen holder", 1], ["manzana", "a red apple", 0], ["tablet", "a closed tablet", 0]] },
+  casa: { n: "Casa (sala y cocina)", mod: "familia, casa, rutina, comida, tiempo libre, clima", base: "A cozy open-plan living room and kitchen", suelo: "wooden floor", pared: "a plain warm wall",
+    frente: { n: "kitchen island counter", ancho: "across the bottom of the frame" },
+    fondo: [
+      ["ventana", "a large window with warm light on the {L} wall and light curtains", 1], ["sofa", "a comfy sofa with cushions", 1],
+      ["cuadros", "a few framed abstract pictures (no readable content)", 1], ["estante", "a wooden bookshelf with books and plants", 1],
+      ["alfombra", "a soft rug on a wooden floor", 1], ["lampara", "a hanging lamp", 1], ["tv", "a flat TV on a low cabinet", 0], ["planta", "a tall indoor plant in the corner", 0]],
+    props: [["frutas", "a fruit bowl", 1], ["tazas", "two cups", 1], ["hierbas", "a small herb pot", 1], ["tabla", "a cutting board", 0]] },
+  oficina: { n: "Oficina luminosa", mod: "trabajo, profesiones, saludos formales, reuniones, teléfono", base: "A bright modern open office", suelo: "light grey carpet", pared: "a plain light wall",
+    frente: { n: "wooden desk", ancho: "across the bottom of the frame" },
+    fondo: [
+      ["ventana", "a tall window on the {L} wall with a daytime city skyline", 1], ["plantas", "a few potted plants", 1],
+      ["vidrio", "a glass meeting-room partition", 1], ["corcho", "a corkboard with abstract colored notes (no readable text)", 1],
+      ["reloj", "a wall clock", 1], ["escritorios", "two distant desks with monitors turned away", 1], ["alfombra", "light grey carpet", 1]],
+    props: [["laptop", "a closed laptop", 1], ["lampara", "a desk lamp", 1], ["lapices", "a pen holder", 1], ["planta", "a small plant", 1], ["cuaderno", "a notebook", 0]] },
+  calle: { n: "Calle, plaza y parque", mod: "direcciones, transporte, clima, lugares, viajes", base: "A sunny small-city plaza", suelo: "cobblestone pavement", pared: "a plain building facade and sky",
+    frente: { n: "low stone wall with a wooden bench backrest", ancho: "across the bottom of the frame" },
+    fondo: [
+      ["edificios", "colorful low-rise buildings with shop awnings and balconies with flowers on the {L} side", 1], ["arbol", "a tree with fresh green leaves casting soft shade", 1],
+      ["parada", "a bus-stop sign with abstract pictograms (no text)", 1], ["avenida", "a tree-lined avenue in the back", 1],
+      ["colina", "a distant hill or bridge", 1], ["cielo", "a blue sky with a few soft clouds", 1], ["adoquin", "cobblestone pavement", 1],
+      ["mesas", "a few café tables far away", 0], ["farola", "a street lamp", 0]],
+    props: [["jardinera", "a flower planter", 1], ["bici", "a parked bicycle", 0]] },
+  tienda: { n: "Tienda y café", mod: "compras, precios, ropa, comida y bebida, pedir en un café", base: "A cozy café-shop interior", suelo: "light wooden floor", pared: "a plain wall section",
+    frente: { n: "wooden service counter", ancho: "across the bottom of the frame" },
+    fondo: [
+      ["ventana", "a shop window with daylight on the {L} side", 1], ["estante", "a shelf of jars, bags and colorful products", 1],
+      ["pizarra", "a small chalkboard menu with abstract scribbles (no readable text)", 1], ["ladrillo", "an exposed brick wall", 1],
+      ["lamparas", "warm pendant lamps", 1], ["vitrina", "a pastry display case", 1], ["suelo", "a light wooden floor", 1]],
+    props: [["cafetera", "an espresso machine", 1], ["tazas", "two cups", 1], ["caja", "a cash register", 1], ["pasteles", "a plate of pastries under a glass dome", 1], ["propinas", "a tip jar", 0]] }
+};
+
+const $ = id => document.getElementById(id);
+const CLAVE = "generadorEscenas.v1";
+let est = { escena: "aula", modo: "completa", luzLado: "left", hora: "manana", profLado: "right", optZona: true, optEstilo: true, optNeg: true, optRes: true,
+            marcas: {}, editados: {}, avance: {}, estilo: ESTILO_BASE };
+try { Object.assign(est, JSON.parse(localStorage.getItem(CLAVE) || "{}")); } catch (e) {}
+function guardar() { try { localStorage.setItem(CLAVE, JSON.stringify(est)); } catch (e) {} }
+
+const contrario = l => l === "left" ? "right" : "left";
+function lista(a) { return a.length <= 1 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]; }
+function marcasDe(esc, tipo) {                      // qué elementos están activos (por defecto, los marcados en la definición)
+  const m = est.marcas[esc + "|" + tipo] || {};
+  return ESCENAS[esc][tipo].map(e => ({ id: e[0], t: e[1], on: e[0] in m ? m[e[0]] : !!e[2] }));
+}
+
+function generar() {
+  const e = ESCENAS[est.escena], L = est.luzLado, T = est.profLado, O = contrario(T);
+  const hora = HORAS.find(h => h.id === est.hora).t;
+  const props = marcasDe(est.escena, "props").filter(p => p.on).map(p => p.t);
+  const conProps = props.length ? ` with ${lista(props)}` : "";
+  if (est.modo === "back") {
+    return `Edit the attached image. Remove the ${e.frente.n}${conProps ? " and everything on it" : ""}, and anything else in the foreground; fill the ${e.suelo} and the wall behind it plausibly, as if the ${e.frente.n} had never been there. Keep everything else exactly identical: same camera, same objects, same colors, same lighting and same outlines. Do not add people, text or new objects. Same canvas size as the attached image.`;
+  }
+  if (est.modo === "front") {
+    return `Edit the attached image. Keep ONLY the ${e.frente.n}${conProps}, on a solid pure green (#00FF00) background. Do not change its size, position, outline or colors. Remove everything else, including the floor, the wall and any shadows or reflections cast on them, and add no green tint or green outline to the object. Nothing else in the image. Same canvas size as the attached image.`;
+  }
+  const fondo = marcasDe(est.escena, "fondo").filter(f => f.on).map(f => f.t.replace("{L}", L));
+  const partes = [];
+  if (est.optEstilo) partes.push(est.estilo.trim());
+  let escena = `${e.base} seen from chest height.`;
+  if (fondo.length) escena += ` It includes: ${fondo.join("; ")}.`;
+  escena += ` In the foreground, a ${e.frente.n} ${e.frente.ancho}${conProps}.`;
+  partes.push(escena);
+  if (est.optZona) partes.push(`Composition: the presenter will be added later on the ${T} half of the frame (his head at about ${T === "right" ? 70 : 30}% of the frame width, waist-up), so keep the ${T}-center area behind the ${e.frente.n} calm and uncluttered (${e.pared}) with low-contrast detail; put the visual interest and the window on the ${O} third and along the edges.`);
+  partes.push(`Lighting: ${hora} coming from the ${L}, soft clear shadows on the ${contrario(L)} side, bright and cheerful, not dark, no neon.`);
+  if (est.optNeg) partes.push(`No people, no animals, no readable text, no logos, no watermark.`);
+  partes.push(`16:9 landscape canvas, ${est.optRes ? "3840x2160" : "1920x1080"}.`);
+  return partes.join("\n\n");
+}
+
+function ajustes() {
+  const m = est.modo;
+  return m === "completa" ? [
+    ["Modo", "Texto a imagen (o imagen con referencia de estilo)"],
+    ["Referencia (opcional)", "entrada/P1_profesor.png solo para copiar el estilo de dibujo. Si aparece el profesor en el resultado, quítala"],
+    ["Relación / tamaño", "16:9 · el mayor disponible (ideal 3840×2160)"],
+    ["Batch", "2–4 imágenes para elegir la mejor · mejora de prompt: Off"]
+  ] : m === "back" ? [
+    ["Modo", "Edición de imagen (no texto a imagen)"],
+    ["Referencia a adjuntar", "La ESCENA COMPLETA que elegiste en el paso 1"],
+    ["Tamaño", "Igual al de la referencia"],
+    ["Salida", "PNG · Batch 1–2 · mejora de prompt: Off"]
+  ] : [
+    ["Modo", "Edición de imagen (no texto a imagen)"],
+    ["Referencia a adjuntar", "La MISMA escena completa del paso 1 (no el BACK)"],
+    ["Tamaño", "Igual al de la referencia"],
+    ["Salida", "PNG con fondo verde puro · Batch 1–2 · mejora de prompt: Off"]
+  ];
+}
+
+function siguiente() {
+  const e = ESCENAS[est.escena], a = est.escena;
+  if (est.modo === "completa") return `Elige la que mejor case con el profesor (contorno, colores planos, luz de día; nada de neón) y que deje la zona del profesor tranquila. Guárdala como <b>${a}_completa.png</b>. Si el estilo no casa, pásame la imagen y ajusto el bloque de estilo antes de seguir con los otros escenarios.`;
+  if (est.modo === "back") return `Comprueba que no quedó rastro de la mesa y que todo lo demás es idéntico a la completa (misma cámara, mismos objetos). Guárdala como <b>${a}_back.png</b>.`;
+  return `Quita el verde con cualquier quita-fondos y guarda <b>${a}_front.png</b> como PNG con transparencia (el fondo se debe ver a cuadros). Ponla sobre el BACK al 50 % para comprobar que encajan: los bordes tienen que coincidir. Si se movió, repite este paso. Después: <b>Escenarios → subir el fondo (BACK)</b> y <b>Subir frente (FRONT)</b>, y me avisas para colocar al profesor. Esta escena sirve para: ${e.mod}.`;
+}
+
+function pintarEscenas() {
+  $("escenas").innerHTML = Object.entries(ESCENAS).map(([id, e]) => {
+    const av = est.avance[id] || {}, hecho = ["completa", "back", "front"].filter(k => av[k]).length;
+    return `<label class="opcion ${id === est.escena ? "sel" : ""}"><input type="radio" name="escena" value="${id}" ${id === est.escena ? "checked" : ""}>
+      <span><b>${e.n}</b><span class="chip ${hecho === 3 ? "hecho" : ""}">${hecho}/3</span><small>${e.mod}</small></span></label>`;
+  }).join("");
+  $("escenas").querySelectorAll("input").forEach(r => r.onchange = () => { est.escena = r.value; guardar(); refrescar(); });
+}
+
+function pintarListas() {
+  const una = (tipo, cont) => {
+    $(cont).innerHTML = `<div class="dos">` + marcasDe(est.escena, tipo).map(x =>
+      `<label class="casilla"><input type="checkbox" data-t="${tipo}" data-id="${x.id}" ${x.on ? "checked" : ""}><span>${x.t.replace("{L}", est.luzLado)}</span></label>`).join("") + `</div>`;
+    $(cont).querySelectorAll("input").forEach(c => c.onchange = () => {
+      const k = est.escena + "|" + tipo; est.marcas[k] = est.marcas[k] || {}; est.marcas[k][c.dataset.id] = c.checked; guardar(); regenerar();
+    });
+  };
+  una("fondo", "listaFondo"); una("props", "listaFrente");
+  $("tituloFrente").textContent = (est.modo === "completa" ? "4 · " : "3 · ") + "Qué lleva la mesa: " + ESCENAS[est.escena].frente.n;
+}
+
+function clave() { return est.escena + "|" + est.modo; }
+function regenerar() {
+  const auto = generar();
+  const mano = est.editados[clave()];
+  $("prompt").value = mano != null ? mano : auto;
+  $("chipEditado").style.display = mano != null ? "" : "none";
+}
+
+function refrescar() {
+  document.querySelectorAll('input[name="modo"]').forEach(r => { r.checked = r.value === est.modo; r.closest("label").classList.toggle("sel", r.checked); });
+  $("panelFondo").style.display = est.modo === "completa" ? "" : "none";
+  $("panelFrente").style.display = "";
+  $("panelLuz").style.display = est.modo === "completa" ? "" : "none";
+  ["luzLado", "hora", "profLado"].forEach(id => { $(id).value = est[id]; });
+  ["optZona", "optEstilo", "optNeg", "optRes"].forEach(id => { $(id).checked = est[id]; });
+  const av = est.avance[est.escena] || {};
+  document.querySelectorAll("[data-av]").forEach(c => c.checked = !!av[c.dataset.av]);
+  pintarEscenas(); pintarListas(); regenerar();
+  $("ajustes").innerHTML = ajustes().map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("");
+  $("siguiente").innerHTML = siguiente();
+  $("estiloTexto").value = est.estilo;
+}
+
+HORAS.forEach(h => { const o = document.createElement("option"); o.value = h.id; o.textContent = h.n; $("hora").appendChild(o); });
+document.querySelectorAll('input[name="modo"]').forEach(r => r.onchange = () => { est.modo = r.value; guardar(); refrescar(); });
+["luzLado", "hora", "profLado"].forEach(id => $(id).onchange = () => { est[id] = $(id).value; guardar(); pintarListas(); regenerar(); });
+["optZona", "optEstilo", "optNeg", "optRes"].forEach(id => $(id).onchange = () => { est[id] = $(id).checked; guardar(); regenerar(); });
+document.querySelectorAll("[data-av]").forEach(c => c.onchange = () => {
+  est.avance[est.escena] = est.avance[est.escena] || {}; est.avance[est.escena][c.dataset.av] = c.checked; guardar(); pintarEscenas();
+});
+$("prompt").oninput = () => {
+  if ($("prompt").value === generar()) delete est.editados[clave()]; else est.editados[clave()] = $("prompt").value;
+  $("chipEditado").style.display = clave() in est.editados ? "" : "none"; guardar();
+};
+$("restaurar").onclick = () => { delete est.editados[clave()]; guardar(); regenerar(); };
+$("estiloTexto").oninput = () => { est.estilo = $("estiloTexto").value; guardar(); regenerar(); };
+$("estiloRestaurar").onclick = () => { est.estilo = ESTILO_BASE; guardar(); $("estiloTexto").value = ESTILO_BASE; regenerar(); };
+$("copiar").onclick = async () => {
+  try { await navigator.clipboard.writeText($("prompt").value); } catch (e) { $("prompt").select(); document.execCommand("copy"); }
+  $("estado").textContent = "Copiado ✓"; $("estado").className = "nota ok"; setTimeout(() => $("estado").textContent = "", 2500);
+};
+refrescar();
+</script>
+</body>
+</html>
