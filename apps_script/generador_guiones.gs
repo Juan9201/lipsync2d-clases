@@ -194,7 +194,11 @@ function carpetaDe_(nivel) {
 function hechasDe_(nivel) {
   var hechas = {};
   var it = carpetaDe_(nivel).getFiles();
-  while (it.hasNext()) { hechas[it.next().getName().split(' ')[0]] = true; }
+  while (it.hasNext()) {
+    var archivo = it.next();
+    if (archivo.isTrashed()) { continue; }              // Drive sigue listando lo borrado (papelera): no cuenta como hecho
+    hechas[archivo.getName().split(' ')[0]] = true;
+  }
   return hechas;
 }
 
