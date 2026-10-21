@@ -82,7 +82,12 @@ def escanear(carpeta: Path, niveles: Optional[Iterable[str]] = None) -> List[Fic
         f = leer_nombre(p.name)
         if f and f.nivel in permitidos:
             fichas.append(FichaGuion(f.nivel, f.modulo, f.posicion, f.humano, f.titulo, f.revisar, p))
-    return sorted(fichas, key=lambda f: (NIVELES.index(f.nivel), f.modulo, f.posicion))
+    unicas = {}                                                      # el mismo id en «A1» y en «A1 Limpio»: se usa la copia limpia
+    for f in fichas:
+        previa = unicas.get(f.id_clase)
+        if previa is None or ("limpio" in str(f.ruta.parent).lower() and "limpio" not in str(previa.ruta.parent).lower()):
+            unicas[f.id_clase] = f
+    return sorted(unicas.values(), key=lambda f: (NIVELES.index(f.nivel), f.modulo, f.posicion))
 
 
 def importar_carpeta(raiz: Path, carpeta: Path, niveles: Optional[Iterable[str]] = None, solo_ia: bool = True) -> dict:
@@ -109,3 +114,29 @@ def importar_carpeta(raiz: Path, carpeta: Path, niveles: Optional[Iterable[str]]
             logica.actualizar_clase(raiz, f.id_clase, texto=texto)                  # el texto cambió en Drive; los ajustes se quedan
             r["actualizadas"].append(f.id_clase)
     return r
+
+
+def exportar_limpios(origen: Path, destino: Path) -> dict:
+    """Copia los guiones de `origen` a `destino` ya limpios (mismo nombre de archivo); los originales no se tocan.
+    Repetirlo solo reescribe lo que cambió."""
+    escritos, sin_cambios = [], []
+    destino = Path(destino)
+    for f in escanear(origen):
+        texto = limpiar_guion(f.ruta.read_text(encoding="utf-8", errors="replace")) + "\n"
+        salida = destino / f.ruta.name
+        if salida.is_file() and salida.read_text(encoding="utf-8") == texto:
+            sin_cambios.append(f.id_clase)
+            continue
+        destino.mkdir(parents=True, exist_ok=True)
+        salida.write_text(texto, encoding="utf-8")
+        escritos.append(f.id_clase)
+    return {"escritos": escritos, "sin_cambios": sin_cambios}
+
+
+if __name__ == "__main__":                                         # python -m src.guiones_drive limpiar <origen> <destino>
+    import sys
+    if len(sys.argv) == 4 and sys.argv[1] == "limpiar":
+        r = exportar_limpios(Path(sys.argv[2]), Path(sys.argv[3]))
+        print(f"{len(r['escritos'])} guiones limpios escritos, {len(r['sin_cambios'])} sin cambios")
+    else:
+        print("Uso: python -m src.guiones_drive limpiar <carpeta con guiones> <carpeta destino>")

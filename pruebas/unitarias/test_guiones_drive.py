@@ -136,3 +136,24 @@ def test_carpeta_inexistente_da_un_error_con_la_accion_a_seguir(tmp_path):
     with pytest.raises(ErrorAccionable) as e:
         importar_carpeta(tmp_path / "p", tmp_path / "no_existe")
     assert "carpeta" in str(e.value).lower()
+
+
+def test_exportar_limpios_escribe_copias_sin_tocar_los_originales_y_es_repetible(drive, tmp_path):
+    from src.guiones_drive import exportar_limpios
+    original = (drive / "A1" / "A1-M01-2 IA - Alphabet - Vowels.txt").read_text(encoding="utf-8")
+    destino = tmp_path / "A1 Limpio"
+    r = exportar_limpios(drive / "A1", destino)
+    assert len(r["escritos"]) == 3 and r["sin_cambios"] == []                       # incluye la humana: limpiar es para todas
+    limpio = (destino / "A1-M01-2 IA - Alphabet - Vowels.txt").read_text(encoding="utf-8")
+    assert RAYA not in limpio and "The Definition" not in limpio and limpio.startswith("¿Sabías que…?")
+    assert (drive / "A1" / "A1-M01-2 IA - Alphabet - Vowels.txt").read_text(encoding="utf-8") == original
+    assert exportar_limpios(drive / "A1", destino) == {"escritos": [], "sin_cambios": ["A1-M01-1", "A1-M01-2", "A1-M01-3"]}
+
+
+def test_si_un_guion_esta_en_la_carpeta_y_en_la_limpia_se_importa_una_sola_vez(drive, tmp_path):
+    from src.guiones_drive import exportar_limpios
+    exportar_limpios(drive / "A1", drive / "A1 Limpio")
+    fichas = [f for f in escanear(drive) if f.nivel == "A1"]
+    assert [f.id_clase for f in fichas] == ["A1-M01-1", "A1-M01-2", "A1-M01-3"]
+    assert all("Limpio" in str(f.ruta.parent) for f in fichas)
+    assert len(importar_carpeta(tmp_path / "p", drive)["creadas"]) == 3
