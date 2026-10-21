@@ -188,7 +188,7 @@ function prompt_(nivel, f) {
       'Definición/Descripción: ' + f.descripcion + '.\nCaso de uso a incluir: ' + f.ejemplo + '.\n\n' +
       'REGLAS CRÍTICAS DE FORMATO Y LENGUAJE:\n' +
       '1. CONDICIÓN DE IDIOMA ESTRICTA: Toda la explicación, teoría y narrativa DEBEN ESTAR EN ESPAÑOL. Sin embargo, cuando menciones palabras, oraciones o ejemplos en inglés, DÉJALOS ESTRICTAMENTE EN INGLÉS (Nivel ' + nivel + ').\n' +
-      '2. LONGITUD: El guion DEBE tener 800 palabras (entre 760 y 840), sin contar los títulos de sección, para 5 minutos de lectura en voz alta. Cuenta antes de responder.\n' +
+      '2. LONGITUD: El guion DEBE tener 800 palabras (entre 760 y 840), sin contar los títulos de sección, para 5 minutos de lectura en voz alta. Cuenta antes de responder. Reparte el texto por igual: unas 130 palabras por sección, sin que ninguna quede corta. NO empieces con «Bienvenidos» ni con un saludo genérico: abre con una pregunta, una situación cotidiana o un dato curioso.\n' +
       '3. SIN ACOTACIONES: NO incluyas direcciones de escena, [SCENE START], **TEACHER**, ni acciones entre paréntesis.\n' +
       '4. SIN MARKDOWN: NO uses # ni asteriscos para los títulos.\n' +
       '5. SECCIONES OBLIGATORIAS: DEBES usar EXACTAMENTE los siguientes bloques literales en inglés para separar tus secciones. Cópialos y pégalos exactamente así, aunque tu explicación debajo esté en español:\n' + titulos_(f);
@@ -197,7 +197,7 @@ function prompt_(nivel, f) {
     'Definition/Description: ' + f.descripcion + '.\nUse case context to include: ' + f.ejemplo + '.\n\n' +
     'CRITICAL FORMATTING RULES:\n' +
     '1. LANGUAGE CONDITION: The ENTIRE script must be written in English. English level: ' + nivel + ' strictly.\n' +
-    '2. LENGTH: The script MUST be 800 words long (between 760 and 840), not counting the section titles, to take 5 minutes to read aloud. Count before answering.\n' +
+    '2. LENGTH: The script MUST be 800 words long (between 760 and 840), not counting the section titles, to take 5 minutes to read aloud. Count before answering. Spread the text evenly: about 130 words per section, none of them short. Do NOT open with a generic greeting such as Welcome: start with a question, an everyday situation or a curious fact.\n' +
     '3. NO STAGE DIRECTIONS: DO NOT include [SCENE START], **TEACHER**, or actions in parentheses.\n' +
     '4. NO MARKDOWN: DO NOT use # or asterisks for titles.\n' +
     '5. MANDATORY SECTIONS: YOU MUST use the EXACT literal text blocks below to separate your sections. Copy and paste them exactly as they appear here:\n' + titulos_(f);
