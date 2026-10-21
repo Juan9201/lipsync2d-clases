@@ -37,6 +37,12 @@
           <button id="btn-importar">Importar archivos .txt</button>
           <span class="nota">Un archivo = una clase; el nombre del archivo es su número.</span>
         </div>
+        <div class="fila sub">
+          <input id="carpeta-drive" size="34" value="G:\My Drive\Guiones" title="Carpeta con los guiones generados (A1, A2, B1, B2)">
+          <label class="check"><input type="checkbox" id="solo-ia" checked> Solo clases de IA</label>
+          <button id="btn-importar-drive">Importar carpeta de guiones</button>
+          <span class="nota">Para cada módulo: la 1.ª clase es humana; las 3 siguientes son las de IA. Repetir no duplica.</span>
+        </div>
         <div class="nota" style="margin-top:8px">Voz: siempre la misma voz masculina (español, inglés o mezclado). «Colombiano» lleva acento colombiano; «Neutro» no.</div>
     </div>
 
@@ -70,7 +76,43 @@
       <div class="fila"><progress id="esc-progreso" value="0" max="100" hidden style="width:320px"></progress><span id="esc-estado" class="nota"></span></div>
     </div>
     <div class="panel"><h2>Escenarios <span id="esc-cuenta" class="nota"></span></h2><div id="esc-lista" class="tarjetas"></div>
-      <p class="nota" id="esc-vacio" hidden>Todavía no hay escenarios. Sube un fondo arriba.</p></div>
+      <p class="nota" id="esc-vacio" hidden>Todavía no hay escenarios. Sube un fondo arriba.</p>
+      <p class="nota">Un escenario «con capas» tiene el fondo trasero y, además, un <strong>frente</strong> (PNG con transparencia del mismo tamaño: la mesa y lo que va
+        delante del personaje). Con las dos capas puedes colocar al personaje «sentado» y darle la luz de la escena.</p></div>
+
+    <div class="panel" id="esc-editor" hidden>
+      <h2>Editor de escena <span id="ed-titulo" class="nota"></span> <span id="ed-guardado" class="nota"></span>
+        <button id="ed-cerrar" class="chico" style="float:right">Cerrar</button></h2>
+      <div class="editor">
+        <div class="vistaprevia">
+          <div class="lienzo-ed"><img id="ed-img" alt="vista previa" draggable="false"><canvas id="ed-guias"></canvas></div>
+          <div class="fila">
+            <label>Plano <select id="ed-plano"><option>PL1</option><option selected>PL2</option><option>PL3</option><option>PL4</option><option>PL5</option></select></label>
+            <label>Pose <select id="ed-pose"></select></label>
+            <label class="check"><input type="checkbox" id="ed-luz" checked> luz</label>
+            <label class="check"><input type="checkbox" id="ed-ver-guias" checked> guías</label>
+          </div>
+          <div class="fila"><span class="nota">Boca</span><span id="ed-bocas" class="botones"></span><span class="nota">Ojos</span><span id="ed-ojos" class="botones"></span></div>
+          <div class="fila"><label>Con el ratón <select id="ed-modo"><option value="pj">mover al personaje</option><option value="luz">colocar la luz elegida</option><option value="mesa">mover la línea de la mesa</option></select></label>
+            <span class="nota">Rueda del ratón = tamaño del personaje. Para colocarlo usa el plano PL1: en los planos cerrados la cámara sigue a la cabeza.</span></div>
+        </div>
+        <div class="controles">
+          <h3>Personaje</h3>
+          <div class="fila"><label>Cabeza X <input type="number" id="ed-cx" step="5"></label><label>Y <input type="number" id="ed-cy" step="5"></label></div>
+          <div class="fila"><label>Tamaño <input type="range" id="ed-esc" min="0.2" max="2" step="0.01"><input type="number" id="ed-escn" step="0.01" style="width:70px"></label></div>
+          <div class="fila"><span class="nota">Ajuste fino de esta pose:</span><label>dx <input type="number" id="ed-dx" step="2" style="width:70px"></label><label>dy <input type="number" id="ed-dy" step="2" style="width:70px"></label>
+            <button id="ed-aj-reset" class="chico">Quitar</button><button id="ed-aj-todas" class="chico" title="Copia este ajuste a todas las poses">Copiar a todas</button></div>
+          <h3>Mesa</h3>
+          <div class="fila"><label>Borde trasero (Y) <input type="range" id="ed-mesa" min="0" max="2160" step="5"><input type="number" id="ed-mesan" step="5" style="width:80px"></label></div>
+          <h3>Luz <label class="check"><input type="checkbox" id="ed-luz-activa"> activa en el video</label></h3>
+          <div class="fila"><label>Ambiente <input type="color" id="ed-ambiente"></label><button id="ed-luz-nueva" class="chico">Añadir luz</button></div>
+          <div id="ed-luces"></div>
+          <h3>Poses permitidas <span class="nota">(ninguna marcada = todas)</span></h3>
+          <div class="fila"><button id="ed-pp-todas" class="chico">Marcar todas</button><button id="ed-pp-ninguna" class="chico">Quitar todas</button></div>
+          <div id="ed-poses" class="poses-permitidas"></div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ============ RENDER ============ -->

@@ -4,7 +4,7 @@ de la toma activa (cuerpo, parpadeo y boca) con la cabeza alineada a la de la po
 Cada pose carga sus imágenes la primera vez que se usa y se guarda en una memoria acotada (las
 poses de una clase son pocas, pero un lote largo no debe acumular las 43 en cada trabajador, P3)."""
 from collections import OrderedDict
-from typing import Dict, List, Mapping, Optional, Tuple, Union
+from typing import Callable, Dict, List, Mapping, Optional, Tuple, Union
 
 from PIL import Image
 
@@ -17,7 +17,7 @@ from src.layers.concretas import AnclasEstaticas, BocaLayer, CuerpoLayer, OjosLa
 
 
 class PersonajeLayer:
-    def __init__(self, poses: Dict[str, Pose], ventana: Union[Ventana, Mapping[str, Ventana]], salida: Tuple[int, int],
+    def __init__(self, poses: Dict[str, Pose], ventana: Union[Ventana, Mapping[str, Ventana], Callable[[str, str], Ventana]], salida: Tuple[int, int],
                  alinear: bool = True, referencia: Optional[str] = None, max_poses_en_memoria: int = 16):
         if not poses:
             raise AssetInvalido("No hay ninguna pose para dibujar al personaje", "Indica al menos una pose")
@@ -29,8 +29,10 @@ class PersonajeLayer:
                 "Genera todas las poses con el mismo tamaño de imagen (por ejemplo 3840x2160)")
         self._poses = dict(poses)
         # una ventana fija, o una por plano (la cámara virtual cambia de plano en cada toma)
+        # (en un escenario con capas, una función (pose, plano) -> ventana: cada pose puede llevar su propio ajuste)
+        self._funcion = ventana if callable(ventana) else None
         self._ventanas = dict(ventana) if isinstance(ventana, Mapping) else None
-        self._ventana = None if self._ventanas is not None else ventana
+        self._ventana = None if (self._ventanas is not None or self._funcion is not None) else ventana
         self._salida, self._alinear = salida, alinear
         self._max = max(1, max_poses_en_memoria)
         self._primera = next(iter(self._poses))
@@ -53,7 +55,9 @@ class PersonajeLayer:
                     self._pelos[pose_id] = centro_cabeza(im)
         return self._pelos[pose_id]
 
-    def _ventana_de(self, plano: Optional[str]) -> Ventana:
+    def _ventana_de(self, plano: Optional[str], pose_id: Optional[str] = None) -> Ventana:
+        if self._funcion is not None:
+            return self._funcion(pose_id, plano)
         if self._ventanas is None:
             return self._ventana
         if plano not in self._ventanas:
@@ -62,8 +66,8 @@ class PersonajeLayer:
         return self._ventanas[plano]
 
     def _conjunto(self, pose_id: str, plano: Optional[str] = None):
-        ventana = self._ventana_de(plano)
-        clave = pose_id if self._ventanas is None else f"{pose_id}|{plano}"
+        ventana = self._ventana_de(plano, pose_id)
+        clave = pose_id if (self._ventanas is None and self._funcion is None) else f"{pose_id}|{plano}"
         if clave in self._conjuntos:
             self._conjuntos.move_to_end(clave)
             return self._conjuntos[clave]

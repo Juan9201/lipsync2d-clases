@@ -17,6 +17,8 @@ from src.biblioteca.modelos import cargar_escenario
 from src.compositor import Compositor
 from src.director import cargar_reglas, dirigir
 from src.encoder import Codificador
+from src.escena import config as escena_cfg_mod
+from src.escena.escena import EscenaLayer
 from src.errores import AssetInvalido
 from src.guion import limpiar_para_analisis
 from src.layers.base import ContextoFrame
@@ -111,13 +113,25 @@ def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
             pose = validar_pose(carpeta_pose)
             poses_clase = {pose.id: pose}
         ruta_fondo = None
+        escena_cfg = None
         if not pose.respaldo:
             carpeta_esc = _buscar_carpeta(raiz / "escenarios", "E", p.escenario)
             if carpeta_esc is None:
                 raise AssetInvalido("No hay ningún escenario disponible para esta pose",
                                     "Sube un escenario (por ejemplo E1_salon.png) a entrada/ y ejecuta "
                                     "`python -m src.biblioteca importar`")
-            ruta_fondo = validar_escenario(carpeta_esc, (W, H))
+            if escena_cfg_mod.es_escena(carpeta_esc):              # escenario con capas: fondo trasero + frente + luces
+                escena_cfg = escena_cfg_mod.cargar_config(carpeta_esc)
+                ruta_fondo = escena_cfg_mod.archivos_de_capas(carpeta_esc)[0]
+                permitidas = escena_cfg["poses_permitidas"]
+                if permitidas:                                      # el escenario puede excluir poses que no valen sentadas
+                    poses_clase = {k: v for k, v in poses_clase.items() if k in permitidas}
+                    if not poses_clase:
+                        raise AssetInvalido(f"Ninguna pose de la clase está permitida en el escenario {carpeta_esc.name}",
+                                            "Permite alguna en el editor de escenas o usa otras poses")
+                    pose = next(iter(poses_clase.values()))
+            else:
+                ruta_fondo = validar_escenario(carpeta_esc, (W, H))
         info = info_audio(audio)
     usar_director = p.director and not pose.respaldo
 
@@ -143,6 +157,9 @@ def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
         if usar_director:
             ruta_reglas = p.reglas or (raiz / "reglas_director.yaml" if (raiz / "reglas_director.yaml").is_file() else None)
             admite = cargar_escenario(carpeta_esc).admite if ruta_fondo is not None else None
+            if escena_cfg is not None and escena_cfg["poses_permitidas"]:
+                base_admite = admite
+                admite = lambda pose_id, plano: pose_id in escena_cfg["poses_permitidas"] and (base_admite is None or base_admite(pose_id, plano))
             tomas = dirigir(list(poses_clase.values()), visemas, len(frames), FPS, escenario_id, semilla,
                             cargar_reglas(ruta_reglas), admite, p.plano_inicial, registro=log.info)
             log.info("Director: %d tomas, planos %s, poses %d", len(tomas), "/".join(sorted({t.plano for t in tomas})),
@@ -164,27 +181,31 @@ def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
     fondo = None
     try:
         with etapa(log, "capas"):
-            plano_base = lt.tomas[0].plano
-            ventana = ventana_plano(pose, plano_base)
-            # con director, una ventana por plano usado: la cámara virtual cambia de plano en cada toma
-            planos = sorted({t.plano for t in lt.tomas}) if usar_director else []
-            ventanas = {pl: ventana_plano(pose, pl) for pl in planos} or None
-            desenfoques = {pl: pose.planos[pl].desenfoque for pl in planos} or None
-            if ruta_fondo is not None and Path(ruta_fondo).suffix.lower() == ".mp4":
-                fondo = FondoVideoLayer(ruta_fondo, ventana, pose.lienzo, (W, H), FPS,
-                                        desenfoque=pose.planos[plano_base].desenfoque, cache_dir=raiz / "cache",
-                                        ventanas=ventanas, desenfoques=desenfoques)
+            if escena_cfg is not None:
+                fondo = EscenaLayer(carpeta_esc, escena_cfg, poses_clase, (W, H), alinear=p.alinear, fps=FPS, cache_dir=raiz / "cache")
+                compositor = Compositor([fondo], (W, H))
             else:
-                fondo = FondoLayer(ruta_fondo, ventana, pose.lienzo, (W, H), pose.planos[plano_base].desenfoque,
-                                   ventanas, desenfoques)
-            if pose.formas is not None or len(poses_clase) > 1 or usar_director:
-                personaje = [PersonajeLayer(poses_clase, ventanas or ventana, (W, H), alinear=p.alinear)]
-            else:
-                anclas = AnclasEstaticas(pose)
-                personaje = [CuerpoLayer(pose, ventana, (W, H)),
-                             OjosLayer(pose, anclas, ventana, (W, H)),
-                             BocaLayer(pose, anclas, ventana, (W, H))]
-            compositor = Compositor([fondo, *personaje], (W, H))
+                plano_base = lt.tomas[0].plano
+                ventana = ventana_plano(pose, plano_base)
+                # con director, una ventana por plano usado: la cámara virtual cambia de plano en cada toma
+                planos = sorted({t.plano for t in lt.tomas}) if usar_director else []
+                ventanas = {pl: ventana_plano(pose, pl) for pl in planos} or None
+                desenfoques = {pl: pose.planos[pl].desenfoque for pl in planos} or None
+                if ruta_fondo is not None and Path(ruta_fondo).suffix.lower() == ".mp4":
+                    fondo = FondoVideoLayer(ruta_fondo, ventana, pose.lienzo, (W, H), FPS,
+                                            desenfoque=pose.planos[plano_base].desenfoque, cache_dir=raiz / "cache",
+                                            ventanas=ventanas, desenfoques=desenfoques)
+                else:
+                    fondo = FondoLayer(ruta_fondo, ventana, pose.lienzo, (W, H), pose.planos[plano_base].desenfoque,
+                                       ventanas, desenfoques)
+                if pose.formas is not None or len(poses_clase) > 1 or usar_director:
+                    personaje = [PersonajeLayer(poses_clase, ventanas or ventana, (W, H), alinear=p.alinear)]
+                else:
+                    anclas = AnclasEstaticas(pose)
+                    personaje = [CuerpoLayer(pose, ventana, (W, H)),
+                                 OjosLayer(pose, anclas, ventana, (W, H)),
+                                 BocaLayer(pose, anclas, ventana, (W, H))]
+                compositor = Compositor([fondo, *personaje], (W, H))
 
         final = raiz / "salidas" / f"{clase_id}_{date.today():%Y%m%d}.mp4"
         with etapa(log, "render_y_encode"):

@@ -104,6 +104,14 @@ $("btn-importar").onclick = () => seguro(async () => {
   $("archivos").value = ""; avisar(`${r.ids.length} clase(s) importada(s).`, true); await cargarClases();
 });
 
+$("btn-importar-drive").onclick = () => seguro(async () => {
+  const r = await api("/api/clases/importar-carpeta", { carpeta: $("carpeta-drive").value.trim(), solo_ia: $("solo-ia").checked });
+  const aviso = [`${r.creadas.length} nueva(s)`, `${r.actualizadas.length} actualizada(s)`, `${r.sin_cambios.length} sin cambios`];
+  if (r.omitidas_humano.length) aviso.push(`${r.omitidas_humano.length} humana(s) omitida(s)`);
+  if (r.ignoradas.length) aviso.push(`${r.ignoradas.length} ignorada(s): ${r.ignoradas.map(i => i.id).join(", ")}`);
+  avisar("Guiones de Drive: " + aviso.join(" · ") + ".", true); await cargarClases();
+});
+
 const dlg = $("dlg-texto");
 async function editarTexto(id) {
   await seguro(async () => {
@@ -191,12 +199,16 @@ async function cargarEscenarios() {
   $("esc-vacio").hidden = e.escenarios.length > 0; $("esc-cuenta").textContent = e.escenarios.length ? `(${e.escenarios.length})` : "";
   $("esc-lista").replaceChildren(...e.escenarios.map(x => {
     const reemplazo = h("input", { type: "file", accept: ".png,.jpg,.jpeg,.webp,.mp4", hidden: true, onchange: ev => { if (ev.target.files[0]) subirFondo(ev.target.files[0], x.nombre, x.id); } });
+    const frente = h("input", { type: "file", accept: ".png,image/png", hidden: true, onchange: ev => { if (ev.target.files[0]) subirFrente(ev.target.files[0], x.carpeta); } });
     return h("div", { class: "tarjeta" },
       h("img", { src: `/miniaturas/${encodeURIComponent(x.carpeta)}.jpg?v=${Date.now()}`, alt: x.carpeta, loading: "lazy" }),
       h("div", { class: "cuerpo" }, h("strong", {}, `${x.id} ${x.nombre}`),
         h("div", { class: "nota" }, `${x.tipo === "video" ? "Video" : "Imagen"} · ${x.ancho}×${x.alto}` + (x.duracion ? ` · ${x.duracion} s` : "")),
         (x.ancho && (x.ancho < 1280 || x.alto < 720)) ? h("div", { class: "aviso nota" }, "Menor que 1280×720: se verá borroso") : "",
+        h("div", { class: "nota" }, x.capas ? h("span", { class: "ok" }, "● con capas (frente)") : "sin frente"),
         h("div", { class: "fila" }, h("button", { class: "chico", onclick: () => reemplazo.click() }, "Reemplazar"), reemplazo,
+          h("button", { class: "chico", onclick: () => frente.click() }, x.capas ? "Cambiar frente" : "Subir frente"), frente,
+          x.capas ? h("button", { class: "chico primario", onclick: () => abrirEditor(x.carpeta) }, "Editar escena") : "",
           h("button", { class: "chico", onclick: () => quitarEscenario(x) }, "Quitar"))));
   }));
   await cargarEstado();
@@ -230,6 +242,138 @@ async function quitarEscenario(x) {
   if (!confirm(`¿Quitar ${x.id} ${x.nombre}? Se guarda en escenarios/_papelera. Las clases que lo usaban pasan a Automático.`)) return;
   await seguro(async () => { await api(`/api/escenarios/${encodeURIComponent(x.carpeta)}/eliminar`, {}); avisar("Escenario quitado.", true); await cargarEscenarios(); await cargarClases(); });
 }
+
+// ---------- subir el frente y editor de escenas ----------
+function subirFrente(archivo, carpeta) {
+  const barra = $("esc-progreso"), texto = $("esc-estado"), xhr = new XMLHttpRequest();
+  xhr.open("POST", `/api/escenas/${encodeURIComponent(carpeta)}/frente`);
+  xhr.setRequestHeader("X-Lipsync", "1"); xhr.setRequestHeader("Content-Type", "application/octet-stream");
+  barra.hidden = false; barra.value = 0; texto.textContent = "Subiendo el frente…";
+  xhr.upload.onprogress = ev => { if (ev.lengthComputable) barra.value = 100 * ev.loaded / ev.total; };
+  xhr.onload = () => { barra.hidden = true; texto.textContent = ""; let d = {}; try { d = JSON.parse(xhr.responseText); } catch (e) { }
+    if (xhr.status === 200) { avisar(`Frente guardado. Luces detectadas: ${d.luces_detectadas}. Pulsa «Editar escena».`, true); cargarEscenarios(); } else avisar(d.error || "No se pudo subir el frente"); };
+  xhr.onerror = () => { barra.hidden = true; avisar("Se perdió la conexión mientras subía"); };
+  xhr.send(archivo);
+}
+
+const ed = { carpeta: null, cfg: null, poses: [], pose: null, visema: "X", ojos: "abierto", v: [0, 0, 1280, 720], pidiendo: false, pendiente: null, tGuardar: null, luz: 0, url: null };
+const planoActual = () => $("ed-plano").value;
+
+async function abrirEditor(carpeta) {
+  await seguro(async () => {
+    const d = await api(`/api/escenas/${encodeURIComponent(carpeta)}/config`);
+    Object.assign(ed, { carpeta, cfg: d.config, poses: d.poses, luz: 0 });
+    ed.pose = (d.poses.find(p => p.id === "frontal_neutro_01") || d.poses[0] || {}).id;
+    $("ed-titulo").textContent = carpeta; $("esc-editor").hidden = false; $("esc-editor").scrollIntoView({ behavior: "smooth" });
+    $("ed-pose").replaceChildren(...d.poses.map(p => h("option", { value: p.id }, p.id.replace("tres_cuartos_der", "3/4").replace("_", " ")))); $("ed-pose").value = ed.pose;
+    $("ed-bocas").replaceChildren(..."ABCDEFGHX".split("").map(v => h("button", { "data-v": v, onclick: () => { ed.visema = v; marcarBotones(); vista(false); } }, v)));
+    $("ed-ojos").replaceChildren(...["abierto", "medio", "cerrado"].map(o => h("button", { "data-o": o, onclick: () => { ed.ojos = o; marcarBotones(); vista(false); } }, o)));
+    marcarBotones(); pintarControles(); vista(false);
+  });
+}
+$("ed-cerrar").onclick = () => { $("esc-editor").hidden = true; };
+function marcarBotones() {
+  document.querySelectorAll("#ed-bocas button").forEach(b => b.classList.toggle("activo", b.dataset.v === ed.visema));
+  document.querySelectorAll("#ed-ojos button").forEach(b => b.classList.toggle("activo", b.dataset.o === ed.ojos));
+}
+const colorAHex = c => "#" + c.map(x => Math.max(0, Math.min(255, Math.round(x * 255))).toString(16).padStart(2, "0")).join("");
+const hexACol = hx => [1, 3, 5].map(i => +(parseInt(hx.slice(i, i + 2), 16) / 255).toFixed(3));
+
+function pintarControles() {
+  const c = ed.cfg, a = c.personaje.ajustes[ed.pose] || { dx: 0, dy: 0 };
+  $("ed-cx").value = Math.round(c.personaje.cabeza[0]); $("ed-cy").value = Math.round(c.personaje.cabeza[1]);
+  $("ed-esc").value = c.personaje.escala; $("ed-escn").value = c.personaje.escala.toFixed(2);
+  $("ed-dx").value = a.dx; $("ed-dy").value = a.dy;
+  $("ed-mesa").max = c.lienzo[1]; $("ed-mesa").value = c.mesa.y; $("ed-mesan").value = Math.round(c.mesa.y);
+  $("ed-luz-activa").checked = c.luz.activa; $("ed-ambiente").value = colorAHex(c.luz.ambiente);
+  $("ed-luces").replaceChildren(...c.luz.luces.map((L, i) => h("div", { class: "luz" + (i === ed.luz ? " sel" : "") },
+    h("div", { class: "fila" }, h("label", { class: "check" }, h("input", { type: "radio", name: "luz-sel", checked: i === ed.luz, onchange: () => { ed.luz = i; pintarControles(); guias(); } }), " "),
+      h("input", { value: L.nombre, size: 14, onchange: e => { L.nombre = e.target.value; cambiado(); } }),
+      h("input", { type: "color", value: colorAHex(L.color), onchange: e => { L.color = hexACol(e.target.value); cambiado(); } }),
+      h("button", { class: "chico", onclick: () => { c.luz.luces.splice(i, 1); ed.luz = 0; pintarControles(); cambiado(); } }, "Quitar")),
+    h("div", { class: "fila" }, ...[["fuerza", 0, 3, 0.05], ["alcance", 100, 4000, 20], ["altura", 20, 2500, 10]].map(([k, mn, mx, st]) =>
+      h("label", {}, k, h("input", { type: "range", min: mn, max: mx, step: st, value: L[k], oninput: e => { L[k] = +e.target.value; cambiado(true); } })))),
+    h("div", { class: "fila" }, h("label", {}, "x", h("input", { type: "number", value: Math.round(L.pos[0]), onchange: e => { L.pos[0] = +e.target.value; cambiado(); } })),
+      h("label", {}, "y", h("input", { type: "number", value: Math.round(L.pos[1]), onchange: e => { L.pos[1] = +e.target.value; cambiado(); } }))))));
+  const permitidas = new Set(c.poses_permitidas);
+  $("ed-poses").replaceChildren(...ed.poses.map(p => h("label", {}, h("input", { type: "checkbox", checked: permitidas.has(p.id), onchange: e => {
+    const s = new Set(ed.cfg.poses_permitidas); e.target.checked ? s.add(p.id) : s.delete(p.id); ed.cfg.poses_permitidas = [...s]; cambiado(); } }), p.id.replace("tres_cuartos_der", "3/4"))));
+}
+function cambiado(borrador) { vista(!!borrador); programaGuardar(); }
+function programaGuardar() {
+  $("ed-guardado").textContent = "· cambios sin guardar…"; clearTimeout(ed.tGuardar);
+  ed.tGuardar = setTimeout(async () => {
+    try { const r = await api(`/api/escenas/${encodeURIComponent(ed.carpeta)}/config`, { config: ed.cfg }); ed.cfg = { ...r.config, lienzo: ed.cfg.lienzo };
+      $("ed-guardado").textContent = "· guardado ✓ " + new Date().toLocaleTimeString(); }
+    catch (e) { $("ed-guardado").textContent = "· NO se guardó: " + e.message; avisar(e.message); }
+  }, 1200);
+}
+const ligar = (id, fn, evento = "input") => $(id).addEventListener(evento, e => { const x = parseFloat(e.target.value); if (!isNaN(x)) { fn(x); pintarControlesSuaves(); cambiado(evento === "input"); } });
+function pintarControlesSuaves() { // refresca solo los números que dependen unos de otros, sin reconstruir las listas (el foco no se pierde)
+  const c = ed.cfg; $("ed-escn").value = c.personaje.escala.toFixed(2); $("ed-esc").value = c.personaje.escala; $("ed-mesan").value = Math.round(c.mesa.y); $("ed-mesa").value = c.mesa.y;
+}
+ligar("ed-cx", x => ed.cfg.personaje.cabeza[0] = x); ligar("ed-cy", x => ed.cfg.personaje.cabeza[1] = x);
+ligar("ed-esc", x => ed.cfg.personaje.escala = x); ligar("ed-escn", x => ed.cfg.personaje.escala = x);
+ligar("ed-mesa", x => ed.cfg.mesa.y = x); ligar("ed-mesan", x => ed.cfg.mesa.y = x);
+const ajuste = () => (ed.cfg.personaje.ajustes[ed.pose] = ed.cfg.personaje.ajustes[ed.pose] || { dx: 0, dy: 0 });
+ligar("ed-dx", x => ajuste().dx = x); ligar("ed-dy", x => ajuste().dy = x);
+$("ed-aj-reset").onclick = () => { delete ed.cfg.personaje.ajustes[ed.pose]; pintarControles(); cambiado(); };
+$("ed-aj-todas").onclick = () => { const a = ajuste(); ed.poses.forEach(p => ed.cfg.personaje.ajustes[p.id] = { dx: a.dx, dy: a.dy }); avisar("Ajuste copiado a todas las poses.", true); cambiado(); };
+$("ed-luz-activa").onchange = e => { ed.cfg.luz.activa = e.target.checked; cambiado(); };
+$("ed-ambiente").onchange = e => { ed.cfg.luz.ambiente = hexACol(e.target.value); cambiado(); };
+$("ed-luz-nueva").onclick = () => { if (ed.cfg.luz.luces.length >= 8) return avisar("Máximo 8 luces"); const w = ed.cfg.lienzo[0];
+  ed.cfg.luz.luces.push({ nombre: "luz " + (ed.cfg.luz.luces.length + 1), pos: [w / 2, ed.cfg.lienzo[1] / 3], color: [1, 0.85, 0.65], fuerza: 1, alcance: Math.round(w * 0.3), altura: Math.round(w * 0.1) });
+  ed.luz = ed.cfg.luz.luces.length - 1; pintarControles(); cambiado(); };
+$("ed-pp-todas").onclick = () => { ed.cfg.poses_permitidas = ed.poses.map(p => p.id); pintarControles(); cambiado(); };
+$("ed-pp-ninguna").onclick = () => { ed.cfg.poses_permitidas = []; pintarControles(); cambiado(); };
+$("ed-plano").onchange = () => vista(false);
+$("ed-luz").onchange = () => vista(false);
+$("ed-ver-guias").onchange = guias;
+$("ed-pose").onchange = e => { ed.pose = e.target.value; pintarControles(); vista(false); };
+
+// ---- la vista previa la dibuja el servidor con el mismo código del render: la boca y los ojos no pueden quedar fuera de sitio ----
+async function vista(borrador) {
+  if (!ed.carpeta) return;
+  if (ed.pidiendo) { ed.pendiente = borrador; return; }
+  ed.pidiendo = true;
+  try {
+    const r = await fetch(`/api/escenas/${encodeURIComponent(ed.carpeta)}/vista`, { method: "POST", headers: { "Content-Type": "application/json", "X-Lipsync": "1" },
+      body: JSON.stringify({ config: ed.cfg, pose: ed.pose, plano: planoActual(), visema: ed.visema, ojos: ed.ojos, luz: $("ed-luz").checked, borrador }) });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || "No se pudo dibujar la vista previa"); }
+    ed.v = r.headers.get("X-Ventana").split(",").map(Number);
+    const blob = await r.blob(); const url = URL.createObjectURL(blob);
+    const img = $("ed-img"); img.onload = () => { guias(); if (ed.url) URL.revokeObjectURL(ed.url); ed.url = url; }; img.src = url;
+  } catch (e) { avisar(e.message); }
+  finally { ed.pidiendo = false; if (ed.pendiente !== null) { const b = ed.pendiente; ed.pendiente = null; vista(b); } }
+}
+function guias() {
+  const img = $("ed-img"), cv = $("ed-guias"); cv.width = img.clientWidth; cv.height = img.clientHeight;
+  const k = cv.getContext("2d"); k.clearRect(0, 0, cv.width, cv.height); if (!$("ed-ver-guias").checked || !ed.cfg) return;
+  const [x0, y0, w, h] = ed.v, ex = cv.width / w, ey = cv.height / h;
+  const ym = (ed.cfg.mesa.y - y0) * ey; k.strokeStyle = "rgba(255,200,0,.9)"; k.setLineDash([8, 6]); k.lineWidth = 2; k.beginPath(); k.moveTo(0, ym); k.lineTo(cv.width, ym); k.stroke(); k.setLineDash([]);
+  k.fillStyle = "rgba(255,200,0,.9)"; k.font = "12px sans-serif"; k.fillText("borde de la mesa", 6, ym - 5);
+  ed.cfg.luz.luces.forEach((L, i) => { const px = (L.pos[0] - x0) * ex, py = (L.pos[1] - y0) * ey; k.strokeStyle = colorAHex(L.color); k.lineWidth = i === ed.luz ? 3 : 1.5;
+    k.beginPath(); k.arc(px, py, i === ed.luz ? 11 : 8, 0, 7); k.stroke(); k.beginPath(); k.moveTo(px - 14, py); k.lineTo(px + 14, py); k.moveTo(px, py - 14); k.lineTo(px, py + 14); k.stroke();
+    k.fillStyle = colorAHex(L.color); k.fillText(L.nombre, px + 12, py - 12); });
+  const cx = (ed.cfg.personaje.cabeza[0] - x0) * ex, cy = (ed.cfg.personaje.cabeza[1] - y0) * ey; k.strokeStyle = "rgba(76,194,255,.9)"; k.lineWidth = 1.5;
+  k.beginPath(); k.moveTo(cx - 10, cy); k.lineTo(cx + 10, cy); k.moveTo(cx, cy - 10); k.lineTo(cx, cy + 10); k.stroke();
+}
+window.addEventListener("resize", () => { if (ed.carpeta && !$("esc-editor").hidden) guias(); });
+(function () {
+  const lienzo = document.querySelector(".lienzo-ed"); let arr = null;
+  const aEscena = ev => { const r = $("ed-img").getBoundingClientRect(), [x0, y0, w, h] = ed.v; return [x0 + (ev.clientX - r.left) / r.width * w, y0 + (ev.clientY - r.top) / r.height * h, w / r.width]; };
+  lienzo.addEventListener("mousedown", ev => {
+    if (!ed.cfg) return; ev.preventDefault(); const modo = $("ed-modo").value, [sx, sy, esc] = aEscena(ev);
+    if (modo === "luz") { const L = ed.cfg.luz.luces[ed.luz]; if (!L) return avisar("Primero añade una luz"); L.pos = [Math.round(sx), Math.round(sy)]; pintarControles(); cambiado(); return; }
+    arr = { modo, x: ev.clientX, y: ev.clientY, cab: [...ed.cfg.personaje.cabeza], mesa: ed.cfg.mesa.y, esc }; lienzo.style.cursor = "grabbing";
+  });
+  window.addEventListener("mousemove", ev => { if (!arr) return; const dx = (ev.clientX - arr.x) * arr.esc, dy = (ev.clientY - arr.y) * arr.esc;
+    if (arr.modo === "pj") { ed.cfg.personaje.cabeza = [Math.round(arr.cab[0] + dx), Math.round(arr.cab[1] + dy)]; } else { ed.cfg.mesa.y = Math.round(arr.mesa + dy); }
+    pintarControlesSuaves(); $("ed-cx").value = ed.cfg.personaje.cabeza[0]; $("ed-cy").value = ed.cfg.personaje.cabeza[1]; vista(true); });
+  window.addEventListener("mouseup", () => { if (!arr) return; arr = null; lienzo.style.cursor = ""; cambiado(false); });
+  lienzo.addEventListener("wheel", ev => { if (!ed.cfg) return; ev.preventDefault(); const f = ev.shiftKey ? 0.005 : 0.02;
+    ed.cfg.personaje.escala = Math.max(0.2, Math.min(2, +(ed.cfg.personaje.escala * (1 + (ev.deltaY < 0 ? f : -f))).toFixed(3))); pintarControlesSuaves(); cambiado(true); }, { passive: false });
+})();
 
 // ---------- arranque ----------
 seguro(async () => { await cargarEstado(); await cargarClases(); sondear(); });

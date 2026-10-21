@@ -123,6 +123,9 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                     if not ARCHIVO_SEGURO.match(nombre) or ".." in nombre:
                         return self._error("Archivo no válido", 404)
                     return self._archivo(carpeta / nombre)
+                m = re.match(r"^/api/escenas/([^/]+)/config$", ruta)
+                if m:
+                    return self._json(logica.config_escena(app.raiz, m.group(1)))
                 m = re.match(r"^/miniaturas/([^/]+)\.jpg$", ruta)
                 if m:
                     return self._archivo(logica.miniatura_escenario(app.raiz, m.group(1)), "image/jpeg")
@@ -154,10 +157,34 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
             try:
                 if ruta == "/api/escenarios":                          # subida binaria: el cuerpo es el archivo
                     return self._subir_escenario(parse_qs(url.query))
+                m = re.match(r"^/api/escenas/([^/]+)/frente$", ruta)
+                if m:
+                    return self._subir_frente(m.group(1))
                 d = self._leer_json()
+                m = re.match(r"^/api/escenas/([^/]+)/config$", ruta)
+                if m:
+                    return self._json({"config": logica.guardar_escena(app.raiz, m.group(1), d.get("config") or {})})
+                m = re.match(r"^/api/escenas/([^/]+)/vista$", ruta)
+                if m:
+                    imagen, v = logica.vista_escena(app.raiz, m.group(1), d.get("config") or {}, d.get("pose", ""), d.get("plano", "PL3"),
+                                                    d.get("visema", "X"), d.get("ojos", "abierto"), bool(d.get("luz", True)),
+                                                    bool(d.get("borrador", False)))
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/jpeg")
+                    self.send_header("Content-Length", str(len(imagen)))
+                    self.send_header("X-Ventana", ",".join(f"{x:.2f}" for x in v))
+                    self.send_header("Access-Control-Expose-Headers", "X-Ventana")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(imagen)
+                    return None
                 campos = {k: d[k] for k in logica.CAMPOS_CLASE if k in d}
                 if ruta == "/api/clases":
                     return self._json(logica.guardar_clase(app.raiz, d.get("texto", ""), d.get("id") or None, **campos))
+                if ruta == "/api/clases/importar-carpeta":
+                    from src.guiones_drive import importar_carpeta
+                    return self._json(importar_carpeta(app.raiz, Path(str(d.get("carpeta") or "")), d.get("niveles") or None,
+                                                       bool(d.get("solo_ia", True))))
                 if ruta == "/api/clases/importar":
                     ids = logica.importar_guiones(app.raiz, d.get("archivos") or [], **campos)
                     return self._json({"ids": ids})
@@ -196,6 +223,30 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                 return None
             except Exception as exc:                                  # un fallo no debe tumbar el servidor
                 return self._error(f"{type(exc).__name__}: {exc}", 500)
+
+        def _subir_frente(self, carpeta: str):
+            largo = int(self.headers.get("Content-Length") or 0)
+            if largo <= 0 or largo > MAX_SUBIDA:
+                raise ErrorAccionable("El archivo está vacío o es demasiado grande (máximo 2 GB)", "Elige otro archivo")
+            temp = app.raiz / "cache" / "subidas"
+            temp.mkdir(parents=True, exist_ok=True)
+            destino = temp / f"frente_{time.time_ns()}.bin"
+            try:
+                with open(destino, "wb") as f:
+                    restante = largo
+                    while restante > 0:
+                        trozo = self.rfile.read(min(1024 * 1024, restante))
+                        if not trozo:
+                            raise ErrorAccionable("La subida se cortó antes de terminar", "Vuelve a subir el archivo")
+                        f.write(trozo)
+                        restante -= len(trozo)
+                return self._json(logica.subir_frente(app.raiz, carpeta, destino))
+            finally:
+                destino.unlink(missing_ok=True)
+                try:
+                    temp.rmdir()
+                except OSError:
+                    pass
 
         def _subir_escenario(self, consulta: dict):
             largo = int(self.headers.get("Content-Length") or 0)

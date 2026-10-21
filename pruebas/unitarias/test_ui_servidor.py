@@ -125,3 +125,16 @@ def test_el_video_se_entrega_completo_y_por_tramos(srv):
 def test_un_video_que_no_existe_da_404(srv):
     _, url, _ = srv
     assert _pedir(url, "/salidas/no_hay.mp4")[0] == 404
+
+
+def test_importar_una_carpeta_de_guiones_por_http(srv, tmp_path):
+    raiz, url, _ = srv
+    drive = tmp_path / "Guiones" / "A1"
+    drive.mkdir(parents=True)
+    texto = "\n\n".join(" ".join(f"p{i}w{k}" for k in range(120)) + "." for i in range(6))
+    (drive / "A1-M01-2 IA - Alphabet - Vowels.txt").write_text(texto, encoding="utf-8")
+    (drive / "A1-M01-1 HUMANO - Alphabet - Letters.txt").write_text(texto, encoding="utf-8")
+    codigo, r = _post(url, "/api/clases/importar-carpeta", {"carpeta": str(tmp_path / "Guiones")})
+    assert codigo == 200 and r["creadas"] == ["A1-M01-2"] and r["omitidas_humano"] == ["A1-M01-1"]
+    codigo, r = _post(url, "/api/clases/importar-carpeta", {"carpeta": str(tmp_path / "no_existe")})
+    assert codigo == 400 and "carpeta" in r["error"].lower()

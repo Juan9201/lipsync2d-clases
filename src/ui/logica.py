@@ -3,6 +3,7 @@ traduce peticiones a estas funciones, así se prueban sin navegador.
 
 Los guiones viven en `clases/<id>.txt` con sus ajustes (idioma, voz, escenarios y poses permitidos) en `clases/<id>.json`.
 La voz es siempre la misma (podcaster-3); solo se elige entre el acento colombiano y el neutro (perfiles de tts.yaml)."""
+import io
 import json
 import re
 import shutil
@@ -195,7 +196,8 @@ def escenarios_disponibles(raiz: Path) -> List[dict]:
         m = CARPETA_ESCENARIO.match(d.name)
         if d.is_dir() and m:
             fondo = _fondo_de(d)
-            salida.append({"id": m.group(1), "nombre": m.group(2) or "", "carpeta": d.name,
+            from src.escena.config import es_escena
+            salida.append({"id": m.group(1), "nombre": m.group(2) or "", "carpeta": d.name, "capas": es_escena(d),
                            **(_medidas(fondo) if fondo else {"tipo": "imagen", "ancho": 0, "alto": 0, "duracion": None})})
     return sorted(salida, key=lambda e: int(e["id"][1:]))
 
@@ -265,6 +267,108 @@ def agregar_escenario(raiz: Path, nombre: str, extension: str, origen: Path, ree
         aviso = f"Mide {medidas['ancho']}x{medidas['alto']}, menos de {MIN_FONDO[0]}x{MIN_FONDO[1]}: se verá ampliado y borroso"
     return {"id": numero, "carpeta": carpeta.name, "nombre": carpeta.name.split("_", 1)[1] if "_" in carpeta.name else "",
             **medidas, "aviso": aviso}
+
+
+# ---------------------------------------------------------------- escenas con capas
+PLANOS_EDITOR = ("PL1", "PL2", "PL3", "PL4", "PL5")
+_poses_cache: Dict[str, object] = {}
+_vistas_cache: Dict[str, object] = {}
+_cerrojo_vista = threading.Lock()
+
+
+def subir_frente(raiz: Path, carpeta: str, origen: Path) -> dict:
+    """Guarda la capa delantera (frente.png): PNG con transparencia, del mismo tamaño que el fondo. Si la escena aún no tenía
+    configuración, se crea con luces detectadas."""
+    from PIL import Image
+    from src.escena import config as cfgmod
+    ruta = _carpeta_escenario(raiz, carpeta)
+    fondo = _fondo_de(ruta)
+    if fondo is None:
+        raise ErrorAccionable(f"El escenario {carpeta} no tiene fondo", "Sube primero el fondo trasero")
+    try:
+        with Image.open(origen) as im:
+            tam, modo = im.size, im.mode
+            alfa_min = im.convert("RGBA").getchannel("A").getextrema()[0]
+            rgba = im.convert("RGBA")
+    except Exception as exc:
+        raise ErrorAccionable("No se pudo leer la capa delantera como imagen", "Expórtala como PNG con transparencia") from exc
+    if alfa_min == 255:
+        raise ErrorAccionable("La capa delantera no tiene transparencia", "Debe ser un PNG con fondo transparente: solo la mesa y lo que va delante del personaje")
+    ancho, alto = cfgmod.lienzo_de(ruta)
+    if tam != (ancho, alto):
+        raise ErrorAccionable(f"La capa delantera mide {tam[0]}x{tam[1]} y el fondo {ancho}x{alto}",
+                              "Las dos capas deben tener exactamente el mismo tamaño y estar alineadas")
+    destino = ruta / "frente.png"
+    temporal = ruta / "frente.png.tmp"
+    rgba.save(temporal, "PNG")
+    temporal.replace(destino)
+    cfg = cfgmod.guardar_config(ruta, cfgmod.cargar_config(ruta)) if not (ruta / cfgmod.ARCHIVO).is_file() else cfgmod.cargar_config(ruta)
+    return {"carpeta": carpeta, "capas": True, "luces_detectadas": len(cfg["luz"]["luces"])}
+
+
+def _poses_v3(raiz: Path, personaje: str = "profesor") -> Dict[str, object]:
+    """Todas las poses por vista del personaje, cargadas una vez (la neutra frontal primero: es la referencia de la cabeza)."""
+    from src.biblioteca.modelos import cargar_pose
+    base = Path(raiz) / "personajes" / personaje / "poses"
+    ids = [p["id"] for p in poses_disponibles(raiz, personaje)]
+    if not ids:
+        raise ErrorAccionable(f"El personaje «{personaje}» no tiene poses por vista", "Impórtalas con `python -m src.biblioteca importar-poses`")
+    ids.sort(key=lambda i: (i != "frontal_neutro_01", not i.endswith("_neutro_01"), i))
+    clave = f"{base}|{len(ids)}"
+    if clave not in _poses_cache:
+        _poses_cache.clear()
+        _poses_cache[clave] = {i: cargar_pose(base / i) for i in ids}
+    return _poses_cache[clave]
+
+
+def config_escena(raiz: Path, carpeta: str) -> dict:
+    """La configuración de la escena y lo que el editor necesita para ofrecerla (poses y planos)."""
+    from src.escena import config as cfgmod
+    ruta = _carpeta_escenario(raiz, carpeta)
+    if not cfgmod.es_escena(ruta):
+        raise ErrorAccionable(f"El escenario {carpeta} no tiene capas", "Sube la capa delantera (frente) para poder editarlo como escena")
+    return {"config": cfgmod.cargar_config(ruta), "poses": poses_disponibles(raiz), "planos": list(PLANOS_EDITOR)}
+
+
+def guardar_escena(raiz: Path, carpeta: str, config: dict) -> dict:
+    from src.escena import config as cfgmod
+    ruta = _carpeta_escenario(raiz, carpeta)
+    if not isinstance(config, dict) or not all(k in config for k in ("personaje", "mesa", "luz")):
+        raise ErrorAccionable("La configuración de la escena está incompleta", "Recarga el editor e inténtalo de nuevo")
+    return cfgmod.guardar_config(ruta, config)
+
+
+def vista_escena(raiz: Path, carpeta: str, config: dict, pose: str, plano: str, visema: str = "X", ojos: str = "abierto",
+                 luz: bool = True, borrador: bool = False):
+    """Un cuadro de la escena con la configuración que se está editando (sin guardarla): (JPEG, ventana del plano en la escena)."""
+    from src.escena import config as cfgmod
+    from src.escena.escena import EscenaLayer, activos_de
+    ruta = _carpeta_escenario(raiz, carpeta)
+    if plano not in PLANOS_EDITOR:
+        raise ErrorAccionable(f"El plano «{plano}» no es válido", f"Usa {', '.join(PLANOS_EDITOR)}")
+    if visema not in "ABCDEFGHX" or len(visema) != 1:
+        raise ErrorAccionable(f"La forma de boca «{visema}» no es válida", "Usa A–H o X")
+    if ojos not in ("abierto", "medio", "cerrado"):
+        raise ErrorAccionable(f"El estado de ojos «{ojos}» no es válido", "Usa abierto, medio o cerrado")
+    poses = _poses_v3(raiz)
+    if pose not in poses:
+        raise ErrorAccionable(f"La pose «{pose}» no existe", "Las poses disponibles son: " + ", ".join(poses))
+    lienzo = cfgmod.lienzo_de(ruta)
+    base = cfgmod.config_defecto(lienzo)
+    cfgmod._fusionar(base, json.loads(json.dumps(config)))
+    limpia = cfgmod.validar_config(base, lienzo)
+    salida = (640, 360) if borrador else (960, 540)
+    clave = json.dumps([str(ruta), limpia, salida], sort_keys=True)
+    with _cerrojo_vista:
+        capa = _vistas_cache.get(clave)
+        if capa is None:
+            _vistas_cache.clear()                                    # una sola configuración a la vez: el editor la cambia sin parar
+            capa = _vistas_cache[clave] = EscenaLayer(ruta, limpia, poses, salida, alinear=True, activos=activos_de(ruta))
+        imagen = capa.vista(pose, plano, visema, ojos, luz)
+        v = capa.ventana_escena(plano)
+    buf = io.BytesIO()
+    imagen.save(buf, "JPEG", quality=82 if borrador else 90)
+    return buf.getvalue(), (v.x0, v.y0, v.w, v.h)
 
 
 def _carpeta_escenario(raiz: Path, carpeta: str) -> Path:
