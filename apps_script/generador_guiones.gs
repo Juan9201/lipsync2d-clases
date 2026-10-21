@@ -158,17 +158,29 @@ function guardar_(carpeta, f, texto, revisar, palabras) {
 
 // ------------------------------------------------------------------ texto
 function contarPalabras_(texto) {
-  var limpio = texto.replace(/^-{5,}$/gm, '').replace(/^(The Definition and Purpose|The Spanish Equivalent|Breaking the Rules and Verb Tenses|Application in Past, Present, and Future|Contexts and Examples of Use|Precautions for Listening and Speaking)$/gm, '');
-  var p = limpio.split(/\s+/).filter(function (w) { return w.length; });
-  return p.length;
+  var limpio = texto.split(/\r?\n/).filter(function (l) {
+    var t = l.trim();
+    return !/^-{5,}$/.test(t) && TODOS_LOS_TITULOS.indexOf(t) < 0;
+  }).join(' ');
+  return limpio.split(/\s+/).filter(function (w) { return w.length; }).length;
 }
 
-var TITULOS = '\n-------------------------------------------------\nThe Definition and Purpose\n-------------------------------------------------\n[Text]\n\n' +
-  '-------------------------------------------------\nThe Spanish Equivalent\n-------------------------------------------------\n[Text]\n\n' +
-  '-------------------------------------------------\nBreaking the Rules and Verb Tenses\n-------------------------------------------------\n[Text]\n\n' +
-  '-------------------------------------------------\nApplication in Past, Present, and Future\n-------------------------------------------------\n[Text]\n\n' +
-  '-------------------------------------------------\nContexts and Examples of Use\n-------------------------------------------------\n[Text]\n\n' +
-  '-------------------------------------------------\nPrecautions for Listening and Speaking\n-------------------------------------------------\n[Text]';
+var RAYA = '-------------------------------------------------\n';
+var TITULOS_VERBOS = ['The Definition and Purpose', 'The Spanish Equivalent', 'Breaking the Rules and Verb Tenses',
+  'Application in Past, Present, and Future', 'Contexts and Examples of Use', 'Precautions for Listening and Speaking'];
+var TITULOS_GENERAL = ['The Definition and Purpose', 'The Spanish Equivalent', 'Common Mistakes',
+  'Practice Phrases', 'Contexts and Examples of Use', 'Precautions for Listening and Speaking'];
+var TODOS_LOS_TITULOS = TITULOS_VERBOS.concat(TITULOS_GENERAL);
+
+// Los temas de verbos y tiempos llevan las secciones de tiempos; el resto (vocabulario, funciones, preposiciones...) no.
+var RE_VERBOS = /verb|tense|present|\bpast\b|future|perfect|continuous|modal|conditional|passive|reported|gerund|infinitive|going to|\bwill\b|\bcan\b|could|should|have to|used to|imperative|causative|wish|inversion|todos los tiempos/i;
+function esDeVerbos_(f) { return RE_VERBOS.test(f.modulo + ' ' + f.subtema); }
+
+function titulos_(f) {
+  return (esDeVerbos_(f) ? TITULOS_VERBOS : TITULOS_GENERAL).map(function (t) {
+    return '\n' + RAYA + t + '\n' + RAYA + '[Text]\n';
+  }).join('');
+}
 
 function prompt_(nivel, f) {
   if (nivel === 'A1' || nivel === 'A2') {
@@ -179,7 +191,7 @@ function prompt_(nivel, f) {
       '2. LONGITUD: El guion DEBE tener 800 palabras (entre 760 y 840), sin contar los títulos de sección, para 5 minutos de lectura en voz alta. Cuenta antes de responder.\n' +
       '3. SIN ACOTACIONES: NO incluyas direcciones de escena, [SCENE START], **TEACHER**, ni acciones entre paréntesis.\n' +
       '4. SIN MARKDOWN: NO uses # ni asteriscos para los títulos.\n' +
-      '5. SECCIONES OBLIGATORIAS: DEBES usar EXACTAMENTE los siguientes bloques literales en inglés para separar tus secciones. Cópialos y pégalos exactamente así, aunque tu explicación debajo esté en español:\n' + TITULOS;
+      '5. SECCIONES OBLIGATORIAS: DEBES usar EXACTAMENTE los siguientes bloques literales en inglés para separar tus secciones. Cópialos y pégalos exactamente así, aunque tu explicación debajo esté en español:\n' + titulos_(f);
   }
   return 'Act as an expert English Teacher. Write a comprehensive study script about the grammar subtopic: "' + f.subtema + '" (Context: ' + f.modulo + ').\n' +
     'Definition/Description: ' + f.descripcion + '.\nUse case context to include: ' + f.ejemplo + '.\n\n' +
@@ -188,7 +200,7 @@ function prompt_(nivel, f) {
     '2. LENGTH: The script MUST be 800 words long (between 760 and 840), not counting the section titles, to take 5 minutes to read aloud. Count before answering.\n' +
     '3. NO STAGE DIRECTIONS: DO NOT include [SCENE START], **TEACHER**, or actions in parentheses.\n' +
     '4. NO MARKDOWN: DO NOT use # or asterisks for titles.\n' +
-    '5. MANDATORY SECTIONS: YOU MUST use the EXACT literal text blocks below to separate your sections. Copy and paste them exactly as they appear here:\n' + TITULOS;
+    '5. MANDATORY SECTIONS: YOU MUST use the EXACT literal text blocks below to separate your sections. Copy and paste them exactly as they appear here:\n' + titulos_(f);
 }
 
 // ------------------------------------------------------------------ utilidades
