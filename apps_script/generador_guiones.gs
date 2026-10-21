@@ -19,6 +19,7 @@ var MIN_PAL = 700, MAX_PAL = 900;          // palabras habladas aceptables (obje
 var MAX_INTENTOS = 3;
 var ESPERA_NORMAL_MS = 60 * 1000;
 var ESPERA_ERROR_MS = 5 * 60 * 1000;
+var REANUDAR_SOLO = true;                   // si se agota la cuota DIARIA, se reanuda solo cuando se renueve (medianoche del Pacífico)
 var SEGURIDAD_MS = 8 * 60 * 1000;           // disparo de rescate por si una ejecución muere a medias
 
 // ------------------------------------------------------------------ arranque
@@ -98,7 +99,7 @@ function tick() {
       };
     });
     var respuestas = UrlFetchApp.fetchAll(peticiones);
-    var transitorios = 0, fatal = '';
+    var transitorios = 0, fatal = '', diaria = false;
     for (var j = 0; j < respuestas.length; j++) {
       var f = lote[j];
       var codigo = respuestas[j].getResponseCode();
@@ -108,6 +109,7 @@ function tick() {
         Logger.log('Saturación/cuota (HTTP ' + codigo + ') en ' + f.id + ': ' + cuerpo.replace(/\s+/g, ' ').substring(0, 280));
         if (/per.?day|daily|prepay|credit|billing|depleted|spending cap|spend cap/i.test(cuerpo)) {   // no se arregla esperando minutos
           fatal = 'Cuota diaria, saldo o tope de gasto agotado (ver mensaje de arriba). La cuota diaria se renueva a medianoche (hora del Pacífico = 2 AM en Colombia).';
+          if (/per.?day|daily/i.test(cuerpo)) { diaria = true; }
           continue;
         }
         transitorios++;
@@ -144,6 +146,7 @@ function tick() {
     if (fatal) {
       Logger.log('DETENIDO por error que no se arregla reintentando -> ' + fatal);
       borrarTriggers_();
+      if (diaria && REANUDAR_SOLO) { programarReanudacion_(); }
       return;
     }
     // Si TODO el lote fue saturación/cuota durante ~1 hora seguida (p. ej. sin saldo), se para en vez de insistir.
@@ -159,6 +162,15 @@ function tick() {
   } finally {
     cerrojo.releaseLock();
   }
+}
+
+// Cuota diaria agotada: un disparo único justo después de que se renueve (08:05 UTC = 3:05 AM en Colombia; sirve con y sin horario de verano).
+function programarReanudacion_() {
+  var ahora = new Date();
+  var siguiente = new Date(Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate(), 8, 5, 0));
+  if (siguiente.getTime() <= ahora.getTime()) { siguiente = new Date(siguiente.getTime() + 24 * 60 * 60 * 1000); }
+  ScriptApp.newTrigger('tick').timeBased().at(siguiente).create();
+  Logger.log('Se reanuda solo el ' + siguiente.toISOString() + ' (cuando se renueve la cuota diaria). detener() lo cancela.');
 }
 
 // Quita restos de formato que la voz leería ("**", "#") y espacios de sobra.
