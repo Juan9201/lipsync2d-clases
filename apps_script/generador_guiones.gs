@@ -72,8 +72,7 @@ function tick() {
       return {
         url: url, method: 'post', contentType: 'application/json', headers: cabeceras, muteHttpExceptions: true,
         payload: JSON.stringify({
-          contents: [{ parts: [{ text: prompt_(pendientes.nivel, f) }] }],
-          generationConfig: { maxOutputTokens: 8192 }
+          contents: [{ parts: [{ text: prompt_(pendientes.nivel, f) }] }]
         })
       };
     });
@@ -81,12 +80,13 @@ function tick() {
     for (var j = 0; j < respuestas.length; j++) {
       var f = lote[j];
       var codigo = respuestas[j].getResponseCode();
-      var texto = '';
+      var texto = '', motivo = '';
       if (codigo === 200) {
         try {
           var json = JSON.parse(respuestas[j].getContentText());
           var partes = (json.candidates && json.candidates[0] && json.candidates[0].content.parts) || [];
           texto = partes.map(function (p) { return p.text || ''; }).join('').trim();
+          motivo = (json.candidates && json.candidates[0] && json.candidates[0].finishReason) || '?';
         } catch (e) { texto = ''; }
       } else if (codigo === 429 || codigo >= 500) {
         espera = ESPERA_ERROR_MS;
@@ -103,7 +103,7 @@ function tick() {
         Logger.log('ABANDONADA ' + f.id + ' (HTTP ' + codigo + ')');
       } else {
         props.setProperty('INT_' + f.id, String(intentos));
-        Logger.log('Reintento ' + f.id + ' (HTTP ' + codigo + ', ' + palabras + ' palabras, intento ' + intentos + ')');
+        Logger.log('Reintento ' + f.id + ' (HTTP ' + codigo + ', ' + palabras + ' palabras, fin: ' + motivo + ', intento ' + intentos + ')');
       }
     }
     ScriptApp.newTrigger('tick').timeBased().after(espera).create();
