@@ -206,6 +206,7 @@ async function cargarEscenarios() {
       h("div", { class: "cuerpo" }, h("strong", {}, `${x.id} ${x.nombre}`),
         h("div", { class: "nota" }, `${x.tipo === "video" ? "Video" : "Imagen"} · ${x.ancho}×${x.alto}` + (x.duracion ? ` · ${x.duracion} s` : "")),
         (x.ancho && (x.ancho < 1280 || x.alto < 720)) ? h("div", { class: "aviso nota" }, "Menor que 1280×720: se verá borroso") : "",
+        x.transparente > 0.25 ? h("div", { class: "mal nota" }, `⚠ ${Math.round(x.transparente * 100)} % del fondo es transparente: se verá negro. ¿Es una capa delantera? Súbela como «frente» de otro escenario. El reparto automático no lo usa.`) : "",
         h("div", { class: "nota" }, x.capas ? h("span", { class: "ok" }, "● con capas (frente)") : "sin frente"),
         h("div", { class: "fila" }, h("button", { class: "chico", onclick: () => reemplazo.click() }, "Reemplazar"), reemplazo,
           h("button", { class: "chico", onclick: () => frente.click() }, x.capas ? "Cambiar frente" : "Subir frente"), frente,

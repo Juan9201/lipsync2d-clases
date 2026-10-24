@@ -43,8 +43,10 @@ def _escenario_de(t: Trabajo, raiz: Path) -> Optional[str]:
     if not candidatos:
         carpeta = Path(raiz) / "escenarios"
         if carpeta.is_dir():
+            from src.escena.config import UMBRAL_TRANSPARENTE, fondo_de, fraccion_transparente
             candidatos = sorted({m.group(1) for d in carpeta.iterdir()
-                                 if d.is_dir() and (m := re.match(r"^(E\d+)(_|$)", d.name))},
+                                 if d.is_dir() and (m := re.match(r"^(E\d+)(_|$)", d.name))
+                                 and not ((f := fondo_de(d)) and fraccion_transparente(f) > UMBRAL_TRANSPARENTE)},   # no a ciegas: se vería negro
                                 key=lambda e: int(e[1:]))
     if not candidatos:
         return None

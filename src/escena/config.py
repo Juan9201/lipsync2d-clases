@@ -16,7 +16,27 @@ from PIL import Image
 
 from src.errores import ErrorAccionable
 
+UMBRAL_TRANSPARENTE = 0.25          # un fondo con más de esto sin imagen se vería negro (p. ej. una capa delantera subida como fondo)
 ARCHIVO = "escena.yaml"
+
+
+def fondo_de(carpeta: Path) -> Optional[Path]:
+    return next((Path(carpeta) / n for n in ("fondo.mp4", "fondo.png", "fondo.jpg") if (Path(carpeta) / n).is_file()), None)
+
+
+def fraccion_transparente(fondo: Path) -> float:
+    """Parte del fondo (0–1) que no tiene imagen (alfa casi cero). Los videos y lo que no se pueda leer cuentan como 0."""
+    fondo = Path(fondo)
+    if fondo.suffix.lower() == ".mp4" or not fondo.is_file():
+        return 0.0
+    try:
+        with Image.open(fondo) as im:
+            if "A" not in im.getbands():
+                return 0.0
+            alfa = np.asarray(im.getchannel("A").resize((160, 90)))
+        return round(float((alfa < 16).mean()), 3)
+    except Exception:
+        return 0.0
 MAX_LUCES = 8
 PARED_DEFECTO = {"arriba": [150, 168, 168], "abajo": [112, 134, 138]}
 

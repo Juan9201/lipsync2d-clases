@@ -197,7 +197,9 @@ def escenarios_disponibles(raiz: Path) -> List[dict]:
         if d.is_dir() and m:
             fondo = _fondo_de(d)
             from src.escena.config import es_escena
+            from src.escena.config import fraccion_transparente
             salida.append({"id": m.group(1), "nombre": m.group(2) or "", "carpeta": d.name, "capas": es_escena(d),
+                           "transparente": fraccion_transparente(fondo) if fondo else 0.0,
                            **(_medidas(fondo) if fondo else {"tipo": "imagen", "ancho": 0, "alto": 0, "duracion": None})})
     return sorted(salida, key=lambda e: int(e["id"][1:]))
 
