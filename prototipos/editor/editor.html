@@ -222,7 +222,7 @@ function pintaOjos(c, ox, oy, z, fantasma) {
   c.drawImage(tmp, (bx - m - ox) * z, (by - m - oy) * z, W * z, H * z);
 }
 function ponOjos(n) { ojos = n; dibujar(); }
-$("blur").oninput = () => { $("blurN").textContent = $("blur").value + " px"; dibujar(); };
+$("blur").oninput = () => { $("blurN").textContent = $("blur").value + " px"; dibujar(); programaGuardado(); };
 $("verCaja").onchange = dibujar;
 $("modoMover").onchange = e => { mover = e.target.value; dibujar(); };
 const tamCaja = () => cajaDe(pose).slice(2);
@@ -355,8 +355,8 @@ let arr = null;
 const posRaton = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height }; };
 function mueveModo(dx, dy) {
   if (mover === "boca") { objetivos().forEach(v => { est.formas[v].x += dx; est.formas[v].y += dy; }); tocar(); return; }
-  if (mover === "parche") { const o = imagenOjos(); if (!o) return; const d = despFuente(o.id).slice(); ajuste.fuente[o.id] = [d[0] - dx, d[1] - dy]; return; }
-  const c = cajaDe(pose); ajuste.caja[pose.nombre] = [c[0] + dx, c[1] + dy, c[2], c[3]];
+  if (mover === "parche") { const o = imagenOjos(); if (!o) return; const d = despFuente(o.id).slice(); ajuste.fuente[o.id] = [d[0] - dx, d[1] - dy]; programaGuardado(); return; }
+  const c = cajaDe(pose); ajuste.caja[pose.nombre] = [c[0] + dx, c[1] + dy, c[2], c[3]]; programaGuardado();     // mover el parche o el recuadro también se guarda en disco
 }
 cv.addEventListener("mousedown", e => { arr = { p: posRaton(e) }; });
 window.addEventListener("mousemove", e => { if (!arr) return; const p = posRaton(e), dx = p.x - arr.p.x, dy = p.y - arr.p.y; arr.p = p; mueveModo(dx, dy); dibujar(); rejilla(); });
