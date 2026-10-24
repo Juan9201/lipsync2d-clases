@@ -98,8 +98,8 @@ def test_con_contorno_el_cambio_de_tono_de_piel_es_gradual_no_un_escalon(proyect
     assert paso <= 4                                                                 # el tono baja suave hasta el de la imagen de parpadeo
 
 
-def test_sin_mascara_el_rectangulo_sigue_igual_y_el_cambio_llega_hasta_la_caja(proyecto_tmp):
-    pose, _ = _importar(proyecto_tmp)                                                # comportamiento anterior
+def test_pidiendo_el_rectangulo_el_comportamiento_anterior_sigue_disponible(proyecto_tmp):
+    pose, _ = _importar(proyecto_tmp, "rectangulo")                                  # comportamiento anterior
     c, p = _cerrada(proyecto_tmp, pose)
     cambio = np.abs(c - p).max(axis=2) > 0
     ys, xs = np.where(cambio)
@@ -124,3 +124,10 @@ def test_la_mascara_tambien_se_puede_pedir_por_parametro_sin_tocar_el_json_del_e
     pose, _ = _importar(proyecto_tmp, "contorno", erosion=8, por_parametro=True)
     c, p = _cerrada(proyecto_tmp, pose)
     assert (c[p[..., 3] == 0] == p[p[..., 3] == 0]).all()                            # igual que pidiéndola en el JSON
+
+
+def test_sin_indicar_nada_el_estandar_es_el_contorno(proyecto_tmp):
+    pose, _ = _importar(proyecto_tmp)                                                # el JSON no trae «mascara»
+    c, p = _cerrada(proyecto_tmp, pose)
+    fuera = p[..., 3] == 0
+    assert (c[fuera] == p[fuera]).all()                                              # nada fuera de la silueta: es el contorno, no el rectángulo

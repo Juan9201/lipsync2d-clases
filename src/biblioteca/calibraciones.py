@@ -80,6 +80,10 @@ def leer_parpadeo(ruta: Optional[Path]) -> Optional[dict]:
     return sec if isinstance(sec, dict) and isinstance(sec.get("cajas"), dict) else None
 
 
+MASCARA_DEFECTO = "contorno"        # estándar de parpadeo desde 2026-10-24: la zona que cambia sigue el contorno del rostro
+EROSION_DEFECTO = 10                # píxeles que se mete el corte hacia dentro del borde de la silueta
+
+
 def _parche_de_parpadeo(blink: Image.Image, centro_blink: Tuple[float, float], pelo_pose: Tuple[float, float],
                         caja: Sequence[float], desp: Sequence[float], borde: float,
                         alfa_pose: Optional[Image.Image] = None, erosion: float = 0.0):
@@ -136,11 +140,11 @@ def _importar_parpadeo(pose_id, vista, carpeta, pelo, sec, carpeta_blink, leer, 
     compartido = sec.get("modo") == "compartido"
     imagenes = sec.get("imagenes") or {}
     alfa_pose, erosion = None, 0.0
-    tipo = sec.get("mascara")
+    tipo = sec.get("mascara", MASCARA_DEFECTO)
     if tipo == "contorno":
         with Image.open(carpeta / "cuerpo.png") as cu:
             alfa_pose = cu.convert("RGBA").getchannel("A")
-        erosion = float(sec.get("erosion_px", 8))
+        erosion = float(sec.get("erosion_px", EROSION_DEFECTO))
     elif tipo not in (None, "", "rectangulo"):
         informe.avisos.append(f"parpadeo: la máscara «{tipo}» no existe (usa «rectangulo» o «contorno»); se usa el rectángulo")
     claves = ("cerrado", "medio") if compartido else (pose_id,)

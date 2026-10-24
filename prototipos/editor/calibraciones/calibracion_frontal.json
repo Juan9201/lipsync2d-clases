@@ -2213,7 +2213,7 @@
  },
  "parpadeo": {
   "modo": "compartido",
-  "borde_suave_px": 10,
+  "borde_suave_px": 30,
   "imagenes": {
    "cerrado": {
     "archivo": "cerrado.jpg",
@@ -2242,10 +2242,10 @@
   },
   "cajas": {
    "frontal_bienvenida_01": [
-    1674,
-    308,
-    476,
-    164
+    1675,
+    139,
+    474,
+    502
    ],
    "frontal_bienvenida_02": [
     1697,

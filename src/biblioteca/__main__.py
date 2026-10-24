@@ -56,7 +56,7 @@ def main(argv=None) -> int:
                          "JSON del Editor de poses: frontal=ruta")
     ip.add_argument("--parpadeo-mascara", choices=("rectangulo", "contorno"), default=None,
                     help="Forma de la zona que cambia al parpadear: el recuadro del editor o el contorno del rostro (de pelo a quijada, difuminado)")
-    ip.add_argument("--erosion-px", type=float, default=None, help="Con «contorno»: cuántos píxeles se mete el corte hacia dentro del borde (por defecto 8)")
+    ip.add_argument("--erosion-px", type=float, default=None, help="Con «contorno»: cuántos píxeles se mete el corte hacia dentro del borde (por defecto 10)")
     ip.add_argument("--personaje", default="profesor")
     ip.add_argument("--raiz", type=Path, default=rutas.RAIZ, help="Raíz del proyecto (por defecto, esta carpeta)")
     args = p.parse_args(argv)
