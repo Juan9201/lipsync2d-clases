@@ -19,6 +19,10 @@
   <a class="enlace" href="http://localhost:8770/editor/editor.html" target="_blank" rel="noopener">Editor de poses ↗</a>
 </header>
 <div id="aviso" hidden></div>
+<section id="envivo" class="panel" hidden>
+  <h2>En vivo <span class="nota" id="envivo-nota"></span></h2>
+  <div id="envivo-lista"></div>
+</section>
 
 <main>
   <!-- ============ GUIONES Y VOZ ============ -->
@@ -135,7 +139,7 @@
       <div class="panel">
         <h2>Correr</h2>
         <div class="fila"><label>Trabajadores <select id="lote-trab"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
-          <button id="btn-lote-correr" class="primario">Correr la cola</button><button id="btn-lote-reintentar">Reintentar errores</button></div>
+          <button id="btn-lote-correr" class="primario">Correr la cola</button><button id="btn-lote-reintentar">Reintentar errores</button><button id="btn-abrir-salidas" title="Abre la carpeta salidas/ en el Explorador">📁 Abrir carpeta de videos</button></div>
         <p class="nota">Cada trabajador usa un núcleo del PC y ≈ 2 GB. Puedes cerrar esta página: la cola sigue mientras la ventana negra del lote esté abierta.</p>
       </div>
     </div>

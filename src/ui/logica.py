@@ -563,6 +563,32 @@ def crear_lote(raiz: Path, nombre: str, ids: List[str]) -> dict:
     return {"manifiesto": destino.name, "encoladas": nuevos, "ya_estaban": len(duplicados)}
 
 
+def progreso_en_vivo(raiz: Path) -> dict:
+    """Etapas y cuadros de las clases que se están procesando (y las últimas terminadas), con la hora del servidor en ms."""
+    from src.progreso import leer_todos
+    ahora = int(time.time() * 1000)
+    return {"ahora_ms": ahora, "clases": leer_todos(raiz, ahora_ms=ahora)}
+
+
+def _abrir_en_explorador(carpeta: Path) -> None:
+    import os
+    if hasattr(os, "startfile"):
+        os.startfile(str(carpeta))                                       # Windows: abre el Explorador de archivos
+    else:
+        subprocess.Popen(["xdg-open", str(carpeta)])
+
+
+def abrir_carpeta_salidas(raiz: Path) -> dict:
+    """Abre la carpeta donde quedan los videos (`salidas/`) en el explorador de archivos del equipo."""
+    carpeta = Path(raiz) / "salidas"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    try:
+        _abrir_en_explorador(carpeta)
+    except OSError as exc:
+        raise ErrorAccionable(f"No se pudo abrir la carpeta de videos: {exc}", f"Ábrela a mano: {carpeta}") from exc
+    return {"carpeta": str(carpeta)}
+
+
 def estado_lote(raiz: Path) -> dict:
     from src.lote.cola import Cola
     ruta = Path(raiz) / "lote" / "cola.db"

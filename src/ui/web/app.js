@@ -179,7 +179,7 @@ async function cargarLote() {
   document.querySelector("#tabla-lote tbody").replaceChildren(...l.trabajos.map(t => h("tr", {},
     h("td", {}, t.id), h("td", {}, t.lote),
     h("td", { class: t.estado === "hecho" ? "ok" : t.estado === "error" ? "mal" : "" }, t.estado),
-    h("td", {}, t.error ? t.error.slice(0, 120) : (t.salida ? t.salida.split(/[\\/]/).pop() : "")))));
+    h("td", {}, t.error ? t.error.slice(0, 120) : (t.salida ? h("button", { class: "chico", title: "Verlo aquí", onclick: () => verVideo(t.salida.split(/[\\/]/).pop()) }, "▶ " + t.salida.split(/[\\/]/).pop()) : "")))));
 }
 $("btn-lote-crear").onclick = () => seguro(async () => {
   const nombre = $("lote-nombre").value.trim() || new Date().toISOString().slice(0, 10) + "-A";
@@ -190,6 +190,7 @@ $("btn-lote-correr").onclick = () => seguro(async () => {
   await api("/api/lote/correr", { trabajadores: +$("lote-trab").value }); avisar("Lote en marcha. Mira el avance aquí abajo.", true); sondear();
   const refrescar = setInterval(() => { if (!document.querySelector('#p-lote').hidden) cargarLote(); }, 5000); setTimeout(() => clearInterval(refrescar), 3600000);
 });
+$("btn-abrir-salidas").onclick = () => seguro(async () => { const r = await api("/api/salidas/abrir", {}); avisar("Carpeta de videos: " + r.carpeta, true); });
 $("btn-lote-reintentar").onclick = () => seguro(async () => { const r = await api("/api/lote/reintentar", {}); avisar(`${r.reintentadas} clase(s) vuelven a la cola.`, true); cargarLote(); });
 $("lote-nombre").placeholder = new Date().toISOString().slice(0, 10) + "-A";
 
@@ -377,3 +378,62 @@ window.addEventListener("resize", () => { if (ed.carpeta && !$("esc-editor").hid
 
 // ---------- arranque ----------
 seguro(async () => { await cargarEstado(); await cargarClases(); sondear(); });
+
+// ---------- cronómetros en vivo (etapas del render con milisegundos) ----------
+const ETAPAS_VIVO = [["voz", "Voz (TTS)"], ["assets", "Cargar poses y fondo"], ["rhubarb", "Análisis de labios (Rhubarb)"],
+  ["linea_de_tiempo", "Director y línea de tiempo"], ["capas", "Preparar capas"], ["render_y_encode", "Render y video"]];
+const vivo = { clases: [], desfase: 0, hayEnCurso: false, timer: null };
+const p2 = n => String(n).padStart(2, "0"), p3 = n => String(n).padStart(3, "0");
+function fmtMs(ms) { ms = Math.max(0, Math.round(ms)); return `${p2(Math.floor(ms / 60000))}:${p2(Math.floor(ms / 1000) % 60)}.${p3(ms % 1000)}`; }
+const ahoraSrv = () => Date.now() - vivo.desfase;
+const ICONOS = { en_curso: "●", ok: "✓", error: "✕", pendiente: "○" };
+
+function tarjetaVivo(c) {
+  const corriendo = c.estado === "en_curso";
+  const porNombre = new Map(c.etapas.map(e => [e.nombre, e]));
+  const nombres = [...ETAPAS_VIVO.map(e => e[0]), ...c.etapas.map(e => e.nombre).filter(n => !ETAPAS_VIVO.some(x => x[0] === n))];
+  const fin = c.fin_ms || ahoraSrv();
+  const filas = [];
+  for (const nombre of nombres) {
+    const e = porNombre.get(nombre), etiqueta = (ETAPAS_VIVO.find(x => x[0] === nombre) || [0, nombre])[1];
+    if (nombre === "voz" && !e) continue;                         // la voz solo aparece si hubo que generarla
+    const est = e ? e.estado : "pendiente";
+    const t = h("span", { class: "t" }, e ? fmtMs((e.fin_ms || ahoraSrv()) - e.inicio_ms) : "—");
+    if (e && !e.fin_ms && corriendo) { t.dataset.ini = e.inicio_ms; }
+    filas.push(h("span", { class: "ic " + est }, ICONOS[est]), h("span", { class: e ? "" : "pendiente" }, etiqueta), t);
+    if (nombre === "render_y_encode" && e && c.total) {
+      const seg = ((e.fin_ms || ahoraSrv()) - e.inicio_ms) / 1000, fps = seg > 0 ? c.n / seg : 0;
+      filas.push(h("div", { class: "barra" }, h("i", { style: `width:${Math.round(c.fraccion * 1000) / 10}%` })),
+        h("div", { class: "barra-txt" }, `${(c.fraccion * 100).toFixed(1)} % · cuadro ${c.n} de ${c.total} · ${fps.toFixed(1)} cuadros/s`));
+    }
+  }
+  const crono = h("span", { class: "crono" }, fmtMs(fin - c.inicio_ms));
+  if (corriendo) crono.dataset.ini = c.inicio_ms;
+  const estadoTxt = { en_curso: "en curso", hecha: "terminada", error: "con error", sin_senal: "sin señal (¿se cerró la ventana del lote?)" }[c.estado] || c.estado;
+  return h("div", { class: "vivo " + c.estado },
+    h("div", { class: "cab" }, h("strong", {}, c.clase, " ", h("span", { class: "nota" }, estadoTxt)), crono),
+    h("div", { class: "etapas-vivas" }, ...filas), c.error ? h("div", { class: "mal", style: "margin-top:6px" }, c.error) : "");
+}
+
+function pintarVivo() {
+  const pestana = document.querySelector("#pestanas button.activa").dataset.p;
+  const lista = vivo.clases.filter(c => c.estado === "en_curso").concat(vivo.clases.filter(c => c.estado !== "en_curso").slice(0, 3));
+  $("envivo").hidden = !(lista.length && (pestana === "render" || pestana === "lote"));
+  $("envivo-nota").textContent = vivo.hayEnCurso ? "· cronómetro con milisegundos" : "· últimas clases";
+  if (!$("envivo").hidden) $("envivo-lista").replaceChildren(...lista.map(tarjetaVivo));
+}
+function tic() {                                                  // entre consulta y consulta, los cronómetros siguen corriendo
+  const ahora = ahoraSrv();
+  document.querySelectorAll("#envivo [data-ini]").forEach(e => e.textContent = fmtMs(ahora - +e.dataset.ini));
+}
+async function consultarVivo() {
+  try {
+    const d = await api("/api/progreso");
+    vivo.clases = d.clases; vivo.desfase = Date.now() - d.ahora_ms; vivo.hayEnCurso = d.clases.some(c => c.estado === "en_curso");
+    pintarVivo();
+  } catch (e) { /* sin servidor un momento: se reintenta */ }
+  setTimeout(consultarVivo, vivo.hayEnCurso ? 400 : 3000);
+}
+setInterval(tic, 33);
+consultarVivo();
+document.querySelectorAll("#pestanas button").forEach(b => b.addEventListener("click", () => setTimeout(pintarVivo, 0)));

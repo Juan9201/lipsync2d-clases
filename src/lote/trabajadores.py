@@ -73,11 +73,15 @@ def parametros_de(t: Trabajo, raiz: Path) -> ParametrosRender:
 
 def ejecutar_trabajo(t: Trabajo, raiz: Path) -> Path:
     """Genera la voz si falta el audio (FR-010) y renderiza la clase."""
-    params = parametros_de(t, raiz)
-    if not params.audio.is_file():
-        from src.cli import generar_voz
-        params.audio = generar_voz(params.guion, t.tts, raiz, t.genero, t.idioma, t.voz)
-    return renderizar(params, raiz)
+    from src.progreso import con_seguimiento
+    from src.registro import etapa, obtener_logger
+    with con_seguimiento(raiz, t.id):                      # incluye la voz: el cronómetro cuenta desde que arranca el trabajo
+        params = parametros_de(t, raiz)
+        if not params.audio.is_file():
+            from src.cli import generar_voz
+            with etapa(obtener_logger("tts"), "voz"):
+                params.audio = generar_voz(params.guion, t.tts, raiz, t.genero, t.idioma, t.voz)
+        return renderizar(params, raiz)
 
 
 def salida_existente(raiz: Path, id_clase: str) -> Optional[Path]:

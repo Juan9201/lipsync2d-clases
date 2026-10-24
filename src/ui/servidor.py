@@ -140,6 +140,8 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                     return self._json({"tareas": app.tareas.listar()})
                 if ruta == "/api/lote":
                     return self._json(logica.estado_lote(app.raiz))
+                if ruta == "/api/progreso":
+                    return self._json(logica.progreso_en_vivo(app.raiz))
                 return self._error("No existe esa página", 404)
             except ErrorAccionable as exc:
                 return self._error(str(exc))
@@ -206,6 +208,8 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                                                 d.get("plano", ""))
                     tid = app.tareas.lanzar_comando(f"Render de {d.get('id')}", cmd, d.get("id", ""), logica.salida_de_render)
                     return self._json({"tarea": tid})
+                if ruta == "/api/salidas/abrir":
+                    return self._json(logica.abrir_carpeta_salidas(app.raiz))
                 if ruta == "/api/lote":
                     return self._json(logica.crear_lote(app.raiz, d.get("nombre", ""), d.get("ids") or []))
                 if ruta == "/api/lote/correr":

@@ -6,6 +6,27 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Optional
 
+_escuchas: list = []
+
+
+def escuchar(callback) -> None:
+    """Quien se apunta recibe (evento, nombre) con evento «inicio», «fin» o «error» de cada etapa (lo usa el seguimiento en vivo)."""
+    _escuchas.append(callback)
+
+
+def dejar_de_escuchar(callback) -> None:
+    if callback in _escuchas:
+        _escuchas.remove(callback)
+
+
+def _avisar(evento: str, nombre: str) -> None:
+    for cb in list(_escuchas):
+        try:
+            cb(evento, nombre)
+        except Exception:                                # el seguimiento nunca debe romper el trabajo
+            pass
+
+
 FORMATO = "%(asctime)s %(levelname)s %(name)s %(message)s"
 
 
@@ -53,12 +74,15 @@ def etapa(log: logging.Logger, nombre: str) -> Iterator[dict]:
     El diccionario devuelto recibe `duracion_s` al terminar."""
     info: dict = {}
     log.info("[%s] inicio", nombre)
+    _avisar("inicio", nombre)
     t0 = time.perf_counter()
     try:
         yield info
     except Exception as exc:
         info["duracion_s"] = time.perf_counter() - t0
         log.error("[%s] error tras %.2f s: %s", nombre, info["duracion_s"], exc)
+        _avisar("error", nombre)
         raise
     info["duracion_s"] = time.perf_counter() - t0
     log.info("[%s] fin en %.2f s", nombre, info["duracion_s"])
+    _avisar("fin", nombre)

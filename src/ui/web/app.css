@@ -65,3 +65,24 @@ progress { accent-color:var(--acento); }
 .poses-permitidas label { color:var(--texto); gap:4px; }
 dialog { background:var(--panel); color:var(--texto); border:1px solid var(--borde); border-radius:10px; width:min(820px, 94vw); }
 dialog::backdrop { background:#000a; }
+
+/* ---------- cronómetros en vivo ---------- */
+#envivo { margin:12px 18px 0; }
+.vivo { border:1px solid var(--borde); border-radius:10px; padding:10px 12px; margin-bottom:10px; background:#181b20; }
+.vivo.en_curso { border-color:var(--acento); }
+.vivo.error, .vivo.sin_senal { border-color:var(--mal); }
+.vivo .cab { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.vivo .cab strong { font-size:15px; }
+.crono { font:700 26px/1.1 ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+.vivo.en_curso .crono { color:var(--acento); }
+.vivo.hecha .crono { color:var(--ok); }
+.etapas-vivas { display:grid; grid-template-columns:22px minmax(0,1fr) auto; gap:3px 8px; margin-top:8px; align-items:center; font-size:13px; }
+.etapas-vivas .ic { text-align:center; color:var(--suave); }
+.etapas-vivas .ic.en_curso { color:var(--acento); animation:parpadeo 1s infinite; }
+.etapas-vivas .ic.ok { color:var(--ok); } .etapas-vivas .ic.error { color:var(--mal); }
+.etapas-vivas .pendiente { color:#6b7480; }
+.etapas-vivas .t { font:13px ui-monospace,Consolas,monospace; font-variant-numeric:tabular-nums; text-align:right; }
+.barra { grid-column:2 / 4; height:7px; background:#111317; border-radius:4px; overflow:hidden; }
+.barra > i { display:block; height:100%; background:var(--acento); }
+.barra-txt { grid-column:2 / 4; color:var(--suave); font-size:12px; margin-top:-1px; }
+@keyframes parpadeo { 50% { opacity:.25; } }

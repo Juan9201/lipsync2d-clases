@@ -1,5 +1,6 @@
 """Un render real con un escenario de capas (fondo + frente + luces): se mide sobre el MP4 que la boca y los parpadeos caen donde deben,
 que el frente tapa al personaje y que el director cambia de plano sin descolocar nada."""
+import json
 import subprocess
 from pathlib import Path
 
@@ -85,6 +86,11 @@ def test_el_render_con_escena_pone_la_boca_y_los_parpadeos_donde_deben_y_el_fren
     raiz, audio, poses, esc = clase
     final = renderizar(ParametrosRender(personaje="profe", audio=audio, resolucion=SALIDA, semilla=1, escenario="E1",
                                         poses=["frontal_neutro_01"], plano="PL2", director=False), raiz=raiz)
+    seg = json.loads((raiz / "logs" / "progreso" / f"{audio.stem}.json").read_text(encoding="utf-8"))     # cronómetros en vivo
+    etapas = {e["nombre"]: e for e in seg["etapas"]}
+    assert seg["estado"] == "hecha" and seg["fraccion"] == 1.0 and seg["n"] == seg["total"] > 0
+    assert {"assets", "rhubarb", "linea_de_tiempo", "render_y_encode"} <= set(etapas) and all(e["estado"] == "ok" for e in etapas.values())
+    assert all(e["fin_ms"] >= e["inicio_ms"] for e in etapas.values()) and seg["fin_ms"] >= etapas["render_y_encode"]["fin_ms"]
     frames = _frames(final)
     capa = EscenaLayer(esc, cfgmod.cargar_config(esc), {poses[0].id: poses[0]}, SALIDA)
     q = lambda x, y: capa.a_pantalla(capa._esc * x + capa._t[0], capa._esc * y + capa._t[1], "PL2")

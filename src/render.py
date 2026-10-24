@@ -27,6 +27,7 @@ from src.layers.concretas import AnclasEstaticas, BocaLayer, CuerpoLayer, FondoL
 from src.layers.fondo_video import FondoVideoLayer
 from src.layers.personaje import PersonajeLayer
 from src.lipsync import analizar, cues_a_frames, suavizar
+from src import progreso
 from src.registro import etapa, obtener_logger
 from src.timeline import LineaDeTiempo, Toma, Visema, semilla_de_clase, tomas_ciclicas
 
@@ -88,6 +89,13 @@ def _a_visemas(frames) -> list:
 
 
 def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
+    """Renderiza una clase y deja su seguimiento en vivo (etapas y cuadros, en ms) para la interfaz."""
+    from src.progreso import con_seguimiento
+    with con_seguimiento(Path(raiz), p.clase_id or Path(p.audio).stem):
+        return _renderizar_clase(p, raiz)
+
+
+def _renderizar_clase(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
     raiz = Path(raiz)
     clase_id = p.clase_id or Path(p.audio).stem
     log = obtener_logger("render", archivo=raiz / "logs" / f"{clase_id}.log")
@@ -217,6 +225,7 @@ def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
                                         float(anim.escala[n]), float(anim.dx[n]), float(anim.dy[n]),
                                         lt.fase_ojos(n), previa, mezcla)
                     enc.escribir(compositor.componer(ctx).tobytes())
+                    progreso.avance(n + 1, lt.n_frames)
                     if n % decimo == 0:
                         log.info("  %d %%", 100 * n // lt.n_frames)
     finally:

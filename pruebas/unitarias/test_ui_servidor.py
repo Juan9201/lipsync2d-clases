@@ -1,6 +1,7 @@
 """El servidor de la interfaz: rutas, seguridad (Host, cabecera X-Lipsync, rutas fuera de carpeta) y entrega de video con Range."""
 import json
 import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -138,3 +139,26 @@ def test_importar_una_carpeta_de_guiones_por_http(srv, tmp_path):
     assert codigo == 200 and r["creadas"] == ["A1-M01-2"] and r["omitidas_humano"] == ["A1-M01-1"]
     codigo, r = _post(url, "/api/clases/importar-carpeta", {"carpeta": str(tmp_path / "no_existe")})
     assert codigo == 400 and "carpeta" in r["error"].lower()
+
+
+def test_abrir_la_carpeta_de_videos_usa_el_explorador_sin_abrir_nada_de_verdad(srv, monkeypatch):
+    from src.ui import logica
+    raiz, url, _ = srv
+    abiertas = []
+    monkeypatch.setattr(logica, "_abrir_en_explorador", abiertas.append)
+    codigo, r = _post(url, "/api/salidas/abrir", {})
+    assert codigo == 200 and r["carpeta"].endswith("salidas") and abiertas == [raiz / "salidas"]
+
+
+def test_progreso_en_vivo_devuelve_las_etapas_con_la_hora_del_servidor(srv):
+    from src.progreso import SeguimientoClase
+    raiz, url, _ = srv
+    s = SeguimientoClase(raiz, "A1-M01-2")
+    s.empezar("rhubarb")
+    time.sleep(0.25)                                            # el avance se limita a cinco escrituras por segundo
+    s.avance(30, 120)
+    codigo, cuerpo, _ = _pedir(url, "/api/progreso")
+    d = json.loads(cuerpo)
+    assert codigo == 200 and abs(d["ahora_ms"] - s.inicio_ms) < 60_000
+    c = d["clases"][0]
+    assert (c["clase"], c["estado"], c["actual"], c["fraccion"]) == ("A1-M01-2", "en_curso", "rhubarb", 0.25)
