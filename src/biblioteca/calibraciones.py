@@ -81,10 +81,13 @@ def leer_parpadeo(ruta: Optional[Path]) -> Optional[dict]:
 
 
 def _parche_de_parpadeo(blink: Image.Image, centro_blink: Tuple[float, float], pelo_pose: Tuple[float, float],
-                        caja: Sequence[float], desp: Sequence[float], borde: float):
+                        caja: Sequence[float], desp: Sequence[float], borde: float,
+                        alfa_pose: Optional[Image.Image] = None, erosion: float = 0.0):
     """Recorta de la imagen de parpadeo el rectángulo de los ojos (con su borde suave) para que, pegado en la pose,
     coincida con la cabeza de la pose: la imagen se desplaza lo que separa su cabeza de la de la pose más el ajuste
-    manual del editor. Devuelve (parche RGBA con el borde difuminado, x, y del parche en el lienzo de la pose)."""
+    manual del editor. Con `alfa_pose` (el canal alfa de la pose) la zona de cambio no es el rectángulo sino la silueta de la cabeza de
+    la pose, metida `erosion` píxeles hacia dentro y difuminada: el corte cae sobre piel con piel y el contorno de tinta no se toca.
+    Devuelve (parche RGBA con el borde difuminado, x, y del parche en el lienzo de la pose)."""
     bx, by, bw, bh = (float(v) for v in caja)
     m = max(0.0, float(borde))
     ancho, alto = int(math.ceil(bw + 2 * m)), int(math.ceil(bh + 2 * m))
@@ -99,6 +102,14 @@ def _parche_de_parpadeo(blink: Image.Image, centro_blink: Tuple[float, float], p
     ImageDraw.Draw(mascara).rectangle((k, k, ancho - 1 - k, alto - 1 - k), fill=255)
     if m > 0:
         mascara = mascara.filter(ImageFilter.GaussianBlur(m / 2))
+    if alfa_pose is not None:
+        sil = alfa_pose.crop((destino[0], destino[1], destino[0] + ancho, destino[1] + alto)).point(lambda v: 255 if v > 16 else 0)
+        silueta = sil                                                    # sin erosión ni difuminado: nada se pinta fuera de la pose
+        if erosion >= 1:
+            sil = sil.filter(ImageFilter.MinFilter(2 * int(round(erosion)) + 1))
+        if m > 0:
+            sil = sil.filter(ImageFilter.GaussianBlur(m / 2))
+        mascara = ImageChops.multiply(ImageChops.multiply(mascara, sil), silueta)
     trozo.putalpha(ImageChops.multiply(trozo.getchannel("A"), mascara))
     return trozo, destino[0], destino[1]
 
@@ -124,6 +135,14 @@ def _importar_parpadeo(pose_id, vista, carpeta, pelo, sec, carpeta_blink, leer, 
         return None
     compartido = sec.get("modo") == "compartido"
     imagenes = sec.get("imagenes") or {}
+    alfa_pose, erosion = None, 0.0
+    tipo = sec.get("mascara")
+    if tipo == "contorno":
+        with Image.open(carpeta / "cuerpo.png") as cu:
+            alfa_pose = cu.convert("RGBA").getchannel("A")
+        erosion = float(sec.get("erosion_px", 8))
+    elif tipo not in (None, "", "rectangulo"):
+        informe.avisos.append(f"parpadeo: la máscara «{tipo}» no existe (usa «rectangulo» o «contorno»); se usa el rectángulo")
     claves = ("cerrado", "medio") if compartido else (pose_id,)
     parches: Dict[str, Tuple[Image.Image, int, int]] = {}
     for k in claves:
@@ -142,7 +161,7 @@ def _importar_parpadeo(pose_id, vista, carpeta, pelo, sec, carpeta_blink, leer, 
             continue
         imagen, centro = leer(ruta)
         parches["medio" if es_medio else "cerrado"] = _parche_de_parpadeo(
-            imagen, centro, pelo, caja, info.get("desp") or (0, 0), sec.get("borde_suave_px", 10))
+            imagen, centro, pelo, caja, info.get("desp") or (0, 0), sec.get("borde_suave_px", 10), alfa_pose, erosion)
     if "cerrado" not in parches:
         return None
     cerrado, x, y = parches["cerrado"]
@@ -214,7 +233,9 @@ def _dueña_de_la_vista(ids: List[str]) -> str:
 def importar_poses(origen: Union[Path, Sequence[Path]], raiz: Path, personaje: str = "profesor",
                    calibraciones: Optional[Path] = None,
                    bocas: Optional[Dict[str, Path]] = None,
-                   parpadeos: Optional[Dict[str, Path]] = None) -> InformeImportacion:
+                   parpadeos: Optional[Dict[str, Path]] = None,
+                   parpadeo_mascara: Optional[str] = None, erosion_px: Optional[float] = None) -> InformeImportacion:
+    """`parpadeo_mascara` («rectangulo» | «contorno») y `erosion_px` mandan sobre lo que traiga el JSON del editor."""
     raiz = Path(raiz)
     origenes = [Path(origen)] if isinstance(origen, (str, Path)) else [Path(o) for o in origen]
     poses_dir = raiz / "personajes" / personaje / "poses"
@@ -222,6 +243,12 @@ def importar_poses(origen: Union[Path, Sequence[Path]], raiz: Path, personaje: s
     cal, juego = leer_calibraciones_con_juego(calibraciones) if calibraciones else ({}, None)
     parpadeos = {k: Path(v) for k, v in (parpadeos or {}).items()}
     sec_parpadeo = leer_parpadeo(calibraciones)
+    if sec_parpadeo is not None and (parpadeo_mascara or erosion_px is not None):
+        sec_parpadeo = dict(sec_parpadeo)
+        if parpadeo_mascara:
+            sec_parpadeo["mascara"] = parpadeo_mascara
+        if erosion_px is not None:
+            sec_parpadeo["erosion_px"] = erosion_px
     vista_parpadeo = juego if juego in parpadeos else (next(iter(parpadeos)) if len(parpadeos) == 1 else None)
     if parpadeos and sec_parpadeo is None:
         informe.avisos.append("--parpadeos: el archivo de calibración no trae la sección «parpadeo» del editor; "

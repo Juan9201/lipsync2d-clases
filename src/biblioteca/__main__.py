@@ -22,7 +22,7 @@ def _importar_poses(args) -> int:
             pares[opcion][vista.strip()] = Path(carpeta.strip())
     try:
         inf = importar_poses(args.origen, args.raiz, args.personaje, args.calibraciones, pares["--bocas"],
-                             pares["--parpadeos"])
+                             pares["--parpadeos"], args.parpadeo_mascara, args.erosion_px)
     except ErrorAccionable as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
@@ -54,6 +54,9 @@ def main(argv=None) -> int:
     ip.add_argument("--parpadeos", action="append", default=[], metavar="VISTA=CARPETA",
                     help="Carpeta con las imágenes de parpadeo de una vista (repetible); usa los recuadros del "
                          "JSON del Editor de poses: frontal=ruta")
+    ip.add_argument("--parpadeo-mascara", choices=("rectangulo", "contorno"), default=None,
+                    help="Forma de la zona que cambia al parpadear: el recuadro del editor o el contorno del rostro (de pelo a quijada, difuminado)")
+    ip.add_argument("--erosion-px", type=float, default=None, help="Con «contorno»: cuántos píxeles se mete el corte hacia dentro del borde (por defecto 8)")
     ip.add_argument("--personaje", default="profesor")
     ip.add_argument("--raiz", type=Path, default=rutas.RAIZ, help="Raíz del proyecto (por defecto, esta carpeta)")
     args = p.parse_args(argv)
