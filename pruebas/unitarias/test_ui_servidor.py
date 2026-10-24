@@ -162,3 +162,56 @@ def test_progreso_en_vivo_devuelve_las_etapas_con_la_hora_del_servidor(srv):
     assert codigo == 200 and abs(d["ahora_ms"] - s.inicio_ms) < 60_000
     c = d["clases"][0]
     assert (c["clase"], c["estado"], c["actual"], c["fraccion"]) == ("A1-M01-2", "en_curso", "rhubarb", 0.25)
+
+
+# ---------------- producir (un solo clic: escenario + lote + arranque) ----------------
+@pytest.fixture
+def produccion(srv, monkeypatch):
+    from src.ui import logica
+    raiz, url, _ = srv
+    for i in (1, 2, 3):
+        _post(url, "/api/clases", {"texto": "Hola " * 200, "id": f"A1-M01-{i}", "idioma": "mixto"})
+    carpeta = raiz / "escenarios" / "E2_calle"
+    carpeta.mkdir(parents=True)
+    from PIL import Image
+    Image.new("RGB", (1280, 720), (10, 80, 120)).save(carpeta / "fondo.png")
+    lanzados = []
+    monkeypatch.setattr(logica.Tareas, "lanzar_comando", lambda self, titulo, cmd, clase="", buscar_salida=None: lanzados.append((titulo, cmd)) or "t1")
+    return raiz, url, lanzados
+
+
+def test_producir_asigna_el_escenario_arma_el_lote_y_arranca_los_trabajadores(produccion):
+    import json as _json
+    raiz, url, lanzados = produccion
+    codigo, r = _post(url, "/api/producir", {"ids": ["A1-M01-1", "A1-M01-2"], "escenario": "E2", "trabajadores": 2})
+    assert codigo == 200 and r["encoladas"] == 2 and r["ya_estaban"] == 0 and r["lote"].startswith("prod-")
+    assert _json.loads((raiz / "clases" / "A1-M01-1.json").read_text(encoding="utf-8"))["escenarios"] == "E2"
+    assert _json.loads((raiz / "clases" / "A1-M01-3.json").read_text(encoding="utf-8"))["escenarios"] == ""     # las no marcadas no se tocan
+    assert len(lanzados) == 1 and lanzados[0][1][-3:] == ["correr", "--trabajadores", "2"]
+
+
+def test_producir_sin_escenario_deja_el_automatico_y_repetir_no_duplica(produccion):
+    raiz, url, lanzados = produccion
+    assert _post(url, "/api/producir", {"ids": ["A1-M01-1"], "escenario": ""})[0] == 200
+    lanzados.clear()
+    codigo, r = _post(url, "/api/producir", {"ids": ["A1-M01-1", "A1-M01-3"], "escenario": ""})
+    assert codigo == 200 and r["encoladas"] == 1 and r["ya_estaban"] == 1 and len(lanzados) == 1
+
+
+def test_producir_rechaza_pedidos_incorrectos_sin_lanzar_nada(produccion):
+    raiz, url, lanzados = produccion
+    assert _post(url, "/api/producir", {"ids": []})[0] == 400
+    codigo, r = _post(url, "/api/producir", {"ids": ["A1-M01-1"], "escenario": "E9"})
+    assert codigo == 400 and "E9" in r["error"]
+    assert _post(url, "/api/producir", {"ids": ["no-existe"]})[0] == 400
+    assert _post(url, "/api/producir", {"ids": ["A1-M01-1"], "trabajadores": 99})[0] == 200               # se limita a 1–4, no falla
+    assert lanzados[-1][1][-1] == "4"
+    assert len(lanzados) == 1
+
+
+def test_producir_no_arranca_otro_lote_si_ya_hay_uno_corriendo(produccion, monkeypatch):
+    from src.ui import logica
+    raiz, url, lanzados = produccion
+    monkeypatch.setattr(logica.Tareas, "listar", lambda self: [{"titulo": "Lote con 2 trabajadores", "estado": "en curso"}])
+    codigo, r = _post(url, "/api/producir", {"ids": ["A1-M01-1"]})
+    assert codigo == 400 and "ya hay un lote" in r["error"].lower() and lanzados == []

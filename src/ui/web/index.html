@@ -58,6 +58,13 @@
         <label class="check"><input type="checkbox" id="op-director" checked> Director (cambia poses y planos)</label>
         <button id="btn-actualizar">Actualizar lista</button>
       </div>
+      <div class="fila opciones" style="margin-top:8px">
+        <label>Ver nivel <select id="op-nivel"><option value="">Todos</option><option>A1</option><option>A2</option><option>B1</option><option>B2</option></select></label>
+        <label class="check"><input type="checkbox" id="op-sinvideo"> Solo las que no tienen video</label>
+        <label>Trabajadores <select id="op-trab"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
+        <button id="btn-producir" class="primario" title="Asigna el escenario, arma el lote con las clases marcadas y lo arranca">▶ Producir marcadas</button>
+        <span class="nota">Marca con la casilla de la cabecera las clases visibles. Hace voz + animación de cada una.</span>
+      </div>
       <table id="tabla-clases">
         <thead><tr><th><input type="checkbox" id="marcar-todas" title="Marcar todas"></th><th>Clase</th><th>Idioma</th><th>Voz</th><th>Escenario</th><th>Palabras</th><th>Audio</th><th>Video</th><th></th></tr></thead>
         <tbody></tbody>

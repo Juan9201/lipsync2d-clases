@@ -212,6 +212,14 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                     return self._json(logica.abrir_carpeta_salidas(app.raiz))
                 if ruta == "/api/lote":
                     return self._json(logica.crear_lote(app.raiz, d.get("nombre", ""), d.get("ids") or []))
+                if ruta == "/api/producir":
+                    if any(t["estado"] == "en curso" and str(t["titulo"]).startswith("Lote") for t in app.tareas.listar()):
+                        raise ErrorAccionable("Ya hay un lote corriendo", "Espera a que termine; su avance está en el panel «En vivo» de la pestaña Lote")
+                    n = max(1, min(int(d.get("trabajadores") or 2), 4))
+                    r = logica.preparar_produccion(app.raiz, d.get("ids") or [], str(d.get("escenario") or ""))
+                    tid = app.tareas.lanzar_comando(f"Lote {r['lote']} · {r['encoladas'] + r['ya_estaban']} clases · {n} trabajadores",
+                                                    [sys.executable, "-m", "src.lote", "correr", "--trabajadores", str(n)])
+                    return self._json({**r, "tarea": tid, "trabajadores": n})
                 if ruta == "/api/lote/correr":
                     n = max(1, min(int(d.get("trabajadores") or 2), 8))
                     tid = app.tareas.lanzar_comando(f"Lote con {n} trabajadores",

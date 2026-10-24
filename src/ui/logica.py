@@ -591,6 +591,24 @@ def abrir_carpeta_salidas(raiz: Path) -> dict:
     return {"carpeta": str(carpeta)}
 
 
+def preparar_produccion(raiz: Path, ids: List[str], escenario: str = "") -> dict:
+    """«Producir marcadas»: comprueba todo antes de tocar nada, asigna el escenario a las clases elegidas (vacío = automático, no se
+    cambia nada) y las encola en un lote con nombre automático. Arrancar los trabajadores lo hace el servidor."""
+    if not ids:
+        raise ErrorAccionable("No marcaste ninguna clase", "Marca en la lista las clases que quieres producir")
+    ids = list(dict.fromkeys(ids))
+    for id_clase in ids:
+        _ficha_de(raiz, id_clase)
+    if escenario and escenario not in {e["id"] for e in escenarios_disponibles(raiz)}:
+        raise ErrorAccionable(f"El escenario «{escenario}» no existe", "Elige uno de la lista de escenarios")
+    if escenario:
+        for id_clase in ids:
+            if _leer_meta(raiz, id_clase)["escenarios"] != escenario:
+                actualizar_clase(raiz, id_clase, escenarios=escenario)
+    nombre = "prod-" + time.strftime("%Y%m%d-%H%M%S")
+    return {"lote": nombre, **crear_lote(raiz, nombre, ids)}
+
+
 def estado_lote(raiz: Path) -> dict:
     from src.lote.cola import Cola
     ruta = Path(raiz) / "lote" / "cola.db"

@@ -53,11 +53,16 @@ async function cargarClases() {
   $("nuevo-id").placeholder = d.siguiente_id;
   pintarClases();
 }
+function clasesVisibles() {
+  const nivel = $("op-nivel").value, sinVideo = $("op-sinvideo").checked;
+  return estado.clases.filter(c => (!nivel || c.id.startsWith(nivel + "-")) && (!sinVideo || !c.video));
+}
 function pintarClases() {
   const cuerpo = document.querySelector("#tabla-clases tbody");
+  const visibles = clasesVisibles();
   $("vacio").hidden = estado.clases.length > 0;
-  $("cuenta").textContent = estado.clases.length ? `(${estado.clases.length})` : "";
-  cuerpo.replaceChildren(...estado.clases.map(c => {
+  $("cuenta").textContent = estado.clases.length ? (visibles.length === estado.clases.length ? `(${estado.clases.length})` : `(${visibles.length} de ${estado.clases.length})`) : "";
+  cuerpo.replaceChildren(...visibles.map(c => {
     const marca = h("input", { type: "checkbox", onchange: ev => { ev.target.checked ? estado.marcadas.add(c.id) : estado.marcadas.delete(c.id); actualizarMarcadas(); } });
     marca.checked = estado.marcadas.has(c.id);
     const idioma = h("select", { onchange: ev => cambiar(c.id, { idioma: ev.target.value }) },
@@ -87,7 +92,23 @@ function pintarClases() {
 function actualizarMarcadas() {
   $("lote-marcadas").textContent = `${estado.marcadas.size} clase${estado.marcadas.size === 1 ? "" : "s"} marcada${estado.marcadas.size === 1 ? "" : "s"}`;
 }
-$("marcar-todas").onchange = ev => { estado.clases.forEach(c => ev.target.checked ? estado.marcadas.add(c.id) : estado.marcadas.delete(c.id)); pintarClases(); };
+$("marcar-todas").onchange = ev => { clasesVisibles().forEach(c => ev.target.checked ? estado.marcadas.add(c.id) : estado.marcadas.delete(c.id)); pintarClases(); };
+$("op-nivel").onchange = $("op-sinvideo").onchange = () => { $("marcar-todas").checked = false; pintarClases(); };
+$("btn-producir").onclick = () => seguro(async () => {
+  const marcadas = estado.clases.filter(c => estado.marcadas.has(c.id));
+  if (!marcadas.length) throw new Error("Marca primero las clases que quieres producir");
+  const trab = +$("op-trab").value, esc = $("op-escenario").value, sinVoz = marcadas.filter(c => !c.audio);
+  const horas = Math.round(marcadas.length * 4 / trab / 60 * 10) / 10;
+  const lineas = [`Vas a producir ${marcadas.length} clase(s) con ${trab} trabajador(es).`,
+    `Escenario: ${esc || "automático (reparto entre los escenarios válidos)"}.`,
+    sinVoz.length ? `Voz nueva (de pago, Gemini): ${sinVoz.length} clase(s), unos ${Math.round(sinVoz.reduce((s, c) => s + c.minutos, 0))} min de audio.` : "Todas ya tienen voz: no se paga voz nueva.",
+    `Tiempo estimado de render: unas ${horas} h.`, "", "¿Continuar?"];
+  const texto = lineas.join("\n");
+  if (!confirm(texto)) return;
+  const r = await api("/api/producir", { ids: marcadas.map(c => c.id), escenario: esc, trabajadores: trab });
+  avisar(`Lote ${r.lote} en marcha: ${r.encoladas} nueva(s)` + (r.ya_estaban ? `, ${r.ya_estaban} ya estaban en la cola` : "") + ".", true);
+  document.querySelector('#pestanas button[data-p="lote"]').click(); sondear();
+});
 async function cambiar(id, campos) { await seguro(async () => { await api("/api/clases/" + id, campos); await cargarClases(); }); }
 $("btn-actualizar").onclick = () => seguro(async () => { await cargarClases(); await cargarEstado(); });
 
