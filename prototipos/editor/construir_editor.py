@@ -29,7 +29,7 @@ VISEMAS = "ABCDEFGHX"
 
 VISTAS = {
     "frontal": {"titulo": "Frontal", "poses": TORSOS / "Frontal", "bocas": "../bocas/frontal/boca_{}.png",
-                "blink_cerrado": TORSOS / "Frontal Blink" / "Frontal_Blink_Color.png",       # con la corrección de color
+                "blink_cerrado": TORSOS / "Frontal Blink" / "Frontal_Blink_Full.png",        # versión del 2026-10-24 (antes: Frontal_Blink_Color.png)
                 "blink_medio": TORSOS / "Frontal Blink" / "Frontal_Blink_Middle.png"},
     "tres_cuartos_der": {"titulo": "3/4 derecha", "poses": TORSOS / "Tres cuartos derecha",
                          "bocas": "../bocas/tres_cuartos/boca34_{}.png",
