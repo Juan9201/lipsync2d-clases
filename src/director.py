@@ -32,6 +32,8 @@ REGLAS_DEFECTO: Dict[str, object] = {
     },
     "reposo": {"activo": True, "mezcla_frames": 2},     # mezcla entre poses (0 = corte seco)
     "acentos": {"activo": True, "probabilidad": 0.5, "duracion_s": [3, 6], "separacion_min_s": 20},
+    # poses 3/4 sin contacto visual (mirada «lateral»): se eligen poco y se cortan pronto; las que miran a cámara no tienen límite
+    "mirada": {"lateral_max_s": 4, "peso_lateral": 0.25},
 }
 
 
@@ -71,6 +73,13 @@ def _validar(r: dict, ruta: str) -> dict:
         raise ErrorAccionable(f"En {ruta}, «separacion_min_s» debe ser ≥ 0", "Escribe segundos, por ejemplo 20")
     if not isinstance(r["tolerancia_pausa_s"], (int, float)) or r["tolerancia_pausa_s"] < 0:
         raise ErrorAccionable(f"En {ruta}, «tolerancia_pausa_s» debe ser ≥ 0", "Escribe segundos, por ejemplo 2")
+    m = r["mirada"]
+    if not isinstance(m["lateral_max_s"], (int, float)) or m["lateral_max_s"] < 0:
+        raise ErrorAccionable(f"En {ruta}, «lateral_max_s» debe ser ≥ 0 (vale {m['lateral_max_s']})",
+                              "Escribe los segundos máximos de una pose sin contacto visual (por ejemplo 4) o 0 para no limitar")
+    if not isinstance(m["peso_lateral"], (int, float)) or not 0 < m["peso_lateral"] <= 1:
+        raise ErrorAccionable(f"En {ruta}, «peso_lateral» debe estar entre 0 (sin incluir) y 1 (vale {m['peso_lateral']})",
+                              "Usa 1 para tratarlas igual que las que miran a cámara, o un valor bajo (0.25) para preferirlas poco")
     p = r["planos"]
     malos = [x for x in p["permitidos"] if x not in PLANOS_VALIDOS]
     if not p["permitidos"] or malos:
@@ -114,6 +123,10 @@ def _es_acento(p) -> bool:
     return getattr(p, "tipo", "") == "acento"
 
 
+def _es_lateral(p) -> bool:
+    return getattr(p, "mirada", "camara") == "lateral"
+
+
 def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int, escenario: str, semilla: int,
             reglas: Optional[dict] = None, admite: Optional[Callable[[str, str], bool]] = None,
             plano_inicial: Optional[str] = None, registro: Optional[Callable[[str], None]] = None) -> List[Toma]:
@@ -139,6 +152,9 @@ def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int,
     ac = reglas["acentos"]
     acento_min, acento_max = (round(s * fps) for s in ac["duracion_s"])
     sep_acentos = round(ac["separacion_min_s"] * fps)
+    lat_max = round(reglas["mirada"]["lateral_max_s"] * fps)         # 0 = sin límite
+    peso_lat = reglas["mirada"]["peso_lateral"]
+    peso_mirada = lambda p: peso_lat if _es_lateral(p) else 1.0
     mezcla = reglas["reposo"]["mezcla_frames"] if reglas["reposo"]["activo"] else 0
     pausas = sorted({v.f0 for v in visemas if v.v == "X" and v.f0 > 0})
 
@@ -164,14 +180,18 @@ def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int,
         return min(cand, key=lambda x: abs(x - objetivo)) if cand else max(lo, min(objetivo, hi))
 
     while True:
+        lateral = lat_max > 0 and _es_lateral(pose)
         if en_acento:
             lo, hi = f + acento_min, f + acento_max
-            objetivo = int(rng.integers(lo, hi + 1))
         else:
             lo, hi = f + toma_min, f + toma_max + tol
-            objetivo = int(rng.integers(f + toma_min, f + toma_max + 1))
+        if lateral:                                                   # una pose sin contacto visual dura poco
+            hi = min(hi, f + lat_max)
+            lo = min(lo, max(f + 1, f + lat_max // 2))
+        objetivo = int(rng.integers(lo, (hi if lateral or en_acento else f + toma_max) + 1))
         corte = cercana(objetivo, lo, hi)
-        if corte >= n_frames - (acento_min if en_acento else toma_min // 2) or corte >= n_frames:
+        margen_fin = fps if lateral else (acento_min if en_acento else toma_min // 2)
+        if corte >= n_frames - margen_fin or corte >= n_frames:
             break
 
         def planos_vecinos():
@@ -187,7 +207,7 @@ def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int,
             w = np.array([peso(c) for c in candidatas], dtype=float)
             return candidatas[int(rng.choice(len(candidatas), p=w / w.sum()))]
 
-        quiere_plano = (not en_acento) and rng.random() < reglas["cambio"]["prob_plano"]
+        quiere_plano = (not en_acento) and (not lateral) and rng.random() < reglas["cambio"]["prob_plano"]
         vecinos, reposo = planos_vecinos(), poses_de_reposo()
         if quiere_plano and vecinos:
             plano_nuevo = elegir(vecinos, lambda q: pl["pesos"].get(q, 1.0) * (pl["evitar_volver"] if q == plano_previo else 1.0))
@@ -198,7 +218,7 @@ def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int,
             continue
         if en_acento:                                              # el acento vuelve solo al reposo
             candidatas = reposo or [p for p in estados if admite(p.id, plano)]
-            nueva = elegir(candidatas, lambda p: 1.0 / (1 + usos[p.id]) ** 2) if candidatas else None
+            nueva = elegir(candidatas, lambda p: peso_mirada(p) / (1 + usos[p.id]) ** 2) if candidatas else None
             motivo = "vuelve al reposo tras el acento"
             en_acento = False
         else:
@@ -206,11 +226,11 @@ def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int,
             puede_acento = (ac["activo"] and posibles_acentos and corte - ultimo_acento >= sep_acentos
                             and n_frames - corte >= acento_max + toma_min and rng.random() < ac["probabilidad"])
             if puede_acento:
-                nueva = elegir(posibles_acentos, lambda p: 1.0 / (1 + usos[p.id]) ** 2)
+                nueva = elegir(posibles_acentos, lambda p: peso_mirada(p) / (1 + usos[p.id]) ** 2)
                 motivo = "acento (gesto breve)"
                 en_acento, ultimo_acento = True, corte
             elif reposo:
-                nueva = elegir(reposo, lambda p: 1.0 / (1 + usos[p.id]) ** 2)
+                nueva = elegir(reposo, lambda p: peso_mirada(p) / (1 + usos[p.id]) ** 2)
                 motivo = "otra variante o gesto de reposo"
             else:
                 nueva = None

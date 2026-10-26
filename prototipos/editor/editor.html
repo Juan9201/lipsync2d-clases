@@ -156,7 +156,7 @@ function porDefecto(p) {
 }
 function cargarPrecarga() {
   const pre = DATOS.precarga || {};
-  Object.keys(pre).forEach(n => { const p = pre[n]; memoria[n + "|" + (p.espejo ? "esp" : "dir")] = { formas: JSON.parse(JSON.stringify(p.formas)) }; lado[n] = !!p.espejo; estadoDe[n] = "ok"; });
+  Object.keys(pre).forEach(n => { const p = pre[n]; memoria[n + "|" + (p.espejo ? "esp" : "dir")] = { formas: JSON.parse(JSON.stringify(p.formas)) }; lado[n] = !!p.espejo; estadoDe[n] = p.estado || "ok"; });
 }
 function iniciarEstados() { Object.values(DATOS.vistas).forEach(v => v.poses.forEach(p => { if (!estadoDe[p.nombre]) estadoDe[p.nombre] = "pend"; })); }
 

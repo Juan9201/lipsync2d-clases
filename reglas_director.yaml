@@ -24,3 +24,7 @@ acentos:                   # gestos breves (pulgar, señalar, bienvenida, contar
   probabilidad: 0.5        # probabilidad de que un cambio de pose sea un acento
   duracion_s: [3, 6]
   separacion_min_s: 20     # como mínimo, tantos segundos entre dos acentos
+
+mirada:                    # poses 3/4 sin contacto visual (las 3/4 que NO terminan en _eye_contact miran hacia un lado)
+  lateral_max_s: 4         # una pose que mira de lado no dura más de esto (0 = sin límite); tras ella siempre cambia la pose
+  peso_lateral: 0.25       # cuánto se prefiere frente a una pose que mira a cámara (1.0). 1 = las trata igual

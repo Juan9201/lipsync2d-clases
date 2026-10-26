@@ -11,6 +11,7 @@ Lee `Temp Real Assest Testing/Torso Organizado/` y escribe en `prototipos/editor
 Las imágenes no se versionan (están en .gitignore); este script las vuelve a crear.
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -33,7 +34,12 @@ VISTAS = {
                 "blink_medio": TORSOS / "Frontal Blink" / "Frontal_Blink_Middle.png"},
     "tres_cuartos_der": {"titulo": "3/4 derecha", "poses": TORSOS / "Tres cuartos derecha",
                          "bocas": "../bocas/tres_cuartos/boca34_{}.png",
-                         "blink_por_pose": TORSOS / "Tres cuartos derecha Blink Organizado"},
+                         "blink_por_pose": TORSOS / "Tres cuartos derecha Blink Organizado",
+                         "excluir": "eye_contact"},               # las poses con contacto visual van en su propia vista
+    # Poses 3/4 que miran a la cámara (archivos *_eye_contact.png): son redibujos completos, así que cada una necesita su propia
+    # calibración de boca. Sin parpadeo por ahora. Parte de la calibración de su pose gemela (la misma sin el sufijo).
+    "tres_cuartos_der_eye_contact": {"titulo": "3/4 derecha · contacto visual", "poses": TORSOS / "Tres cuartos derecha",
+                                     "bocas": "../bocas/tres_cuartos/boca34_{}.png", "solo": "eye_contact"},
 }
 
 
@@ -72,14 +78,16 @@ def construir():
     datos = {"lienzo": [3840, 2160], "vistas": {}, "precarga": {}}
     previo = json.loads(CAL34.read_text(encoding="utf-8")) if CAL34.is_file() else {"poses": {}}
     for vid, cfg in VISTAS.items():
-        archivos = sorted(cfg["poses"].glob("*.png"))
+        archivos = sorted(f for f in cfg["poses"].glob("*.png")
+                          if ("solo" not in cfg or cfg["solo"] in f.stem)
+                          and ("excluir" not in cfg or cfg["excluir"] not in f.stem))
         if not archivos:
             raise SystemExit(f"No hay poses en {cfg['poses']}")
         centros = {}
         for f in archivos:
             with Image.open(f) as im:
                 centros[f.stem] = centro_cabeza(im.convert("RGBA"))
-        ref = next((n for n in centros if n.endswith("_neutro_01")), sorted(centros)[0])
+        ref = next((n for n in centros if "_neutro_01" in n), sorted(centros)[0])
         poses = []
         for f in archivos:
             n = f.stem
@@ -121,6 +129,18 @@ def construir():
     for nombre, p in previo.get("poses", {}).items():       # calibración 3/4 aprobada (nombres cortos -> ids completos)
         completo = f"tres_cuartos_der_{nombre}"
         datos["precarga"][completo] = {"espejo": bool(p.get("espejo", False)), "formas": p["formas"]}
+    # las poses con contacto visual parten de la calibración de su gemela, movida lo que se movió la cabeza
+    v_ec, v_base = datos["vistas"].get("tres_cuartos_der_eye_contact"), datos["vistas"].get("tres_cuartos_der")
+    if v_ec and v_base:
+        centros_base = {p["nombre"]: p["centro"] for p in v_base["poses"]}
+        for pose in v_ec["poses"]:
+            base = re.sub(r"_eye_contacts?$", "", pose["nombre"])
+            if base in datos["precarga"] and base in centros_base:
+                dx, dy = pose["centro"][0] - centros_base[base][0], pose["centro"][1] - centros_base[base][1]
+                b = datos["precarga"][base]
+                datos["precarga"][pose["nombre"]] = {"espejo": b["espejo"], "estado": "her", "formas": {
+                    v: {**f, "x": round(f["x"] + dx, 1), "y": round(f["y"] + dy, 1)} for v, f in b["formas"].items()}}
+                print(f"  {pose['nombre']}: parte de la calibración de {base} (cabeza movida {dx:+.1f}, {dy:+.1f} px)")
     (SALIDA / "datos_editor.js").write_text("const DATOS = " + json.dumps(datos, ensure_ascii=False) + ";\n", encoding="utf-8")
     print(f"datos_editor.js listo: {sum(len(v['poses']) for v in datos['vistas'].values())} poses, "
           f"{len(datos['precarga'])} calibradas de partida")

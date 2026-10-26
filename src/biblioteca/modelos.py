@@ -11,7 +11,9 @@ from src.errores import AssetInvalido
 _NOMBRE_CARPETA = re.compile(r"^([PE])(\d+)(?:_(.+))?$")
 # Poses de la v3: <vista>_<gesto>_<NN>, p. ej. frontal_neutro_01 o tres_cuartos_der_explicar_01.
 # La vista puede llevar guiones bajos; el gesto no (puede llevar tildes, p. ej. señalar).
-_NOMBRE_POSE_V3 = re.compile(r"^(?P<vista>.+?)_(?P<gesto>[^_]+)_(?P<nn>\d+)$")
+# <vista>_<gesto>_<NN> y, opcional, «_eye_contact» (la variante de 3/4 que mira a la cámara; se acepta «_eye_contacts» por si se escribe con s)
+_NOMBRE_POSE_V3 = re.compile(r"^(?P<vista>.+?)_(?P<gesto>[^_]+)_(?P<nn>\d+)(?P<mirada>_eye_contacts?)?$")
+MIRADAS = ("camara", "lateral")
 TIPOS_GESTO = ("estado", "acento")
 # Gestos de acento (breves: vuelven solos al reposo); el resto son estados
 GESTOS_DE_ACENTO = frozenset({"pulgar", "señalar", "bienvenida", "contar"})
@@ -99,6 +101,7 @@ class Pose:
     pelo: Optional[Tuple[float, float]] = None       # centro de la cabeza (alineación en los cortes)
     parpadeo: bool = False
     parche_ojos: Optional[ParcheOjos] = None         # imágenes de parpadeo importadas (None = la pose no parpadea)
+    mirada: str = "camara"                           # «camara» (mira al espectador) o «lateral» (3/4 sin contacto visual)
 
 
 def espejo_de_forma(pose: "Pose", visema: str) -> bool:
@@ -229,12 +232,16 @@ def _cargar_pose_v3(carpeta: Path, d: dict, cfg_ruta: Path) -> Pose:
                                float(v.get("desenfoque", base.desenfoque)))
     mov = d.get("movimiento") or {}
     pelo = d.get("pelo")
+    sufijo = _NOMBRE_POSE_V3.match(carpeta.name).group("mirada")
+    mirada = str(d.get("mirada") or ("camara" if sufijo or not vista.startswith("tres_cuartos") else "lateral"))
+    if mirada not in MIRADAS:
+        raise AssetInvalido(f"La mirada «{mirada}» de la pose {id_carpeta} no es válida", "Usa «camara» o «lateral» en config.yaml")
     return Pose(id_carpeta, str(d.get("nombre") or f"{gesto} {variante:02d}"), lienzo, bool(d.get("espejo", False)),
                 d.get("bocas_de"), anclas, planos,
                 Movimiento(float(mov.get("respiracion_escala", 0.0)), float(mov.get("cabeza_px", 0.0))), carpeta,
                 False, d.get("ojos_de"), vista, gesto, tipo, variante, formas,
                 (float(pelo[0]), float(pelo[1])) if pelo else None, bool(d.get("parpadeo", False)),
-                _parche_ojos(d, id_carpeta, carpeta))
+                _parche_ojos(d, id_carpeta, carpeta), mirada)
 
 
 def _ancla(datos: dict, nombre: str, lienzo: Tuple[int, int], ruta: Path) -> Ancla:
