@@ -157,3 +157,12 @@ def test_si_un_guion_esta_en_la_carpeta_y_en_la_limpia_se_importa_una_sola_vez(d
     assert [f.id_clase for f in fichas] == ["A1-M01-1", "A1-M01-2", "A1-M01-3"]
     assert all("Limpio" in str(f.ruta.parent) for f in fichas)
     assert len(importar_carpeta(tmp_path / "p", drive)["creadas"]) == 3
+
+
+def test_si_drive_deja_una_copia_vacia_del_mismo_guion_se_usa_la_que_tiene_texto(drive, tmp_path):
+    bueno = drive / "A1" / "A1-M01-2 IA - Alphabet - Vowels.txt"
+    vacio = drive / "A1" / "A1-M01-2 IA - Alphabet - Vowels (1).txt"               # ordena antes que la buena por el espacio
+    vacio.write_text("", encoding="utf-8")
+    elegido = [f for f in escanear(drive) if f.id_clase == "A1-M01-2"]
+    assert len(elegido) == 1 and elegido[0].ruta == bueno
+    assert "A1-M01-2" in importar_carpeta(tmp_path / "p", drive)["creadas"]

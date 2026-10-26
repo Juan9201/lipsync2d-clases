@@ -82,10 +82,12 @@ def escanear(carpeta: Path, niveles: Optional[Iterable[str]] = None) -> List[Fic
         f = leer_nombre(p.name)
         if f and f.nivel in permitidos:
             fichas.append(FichaGuion(f.nivel, f.modulo, f.posicion, f.humano, f.titulo, f.revisar, p))
-    unicas = {}                                                      # el mismo id en «A1» y en «A1 Limpio»: se usa la copia limpia
+    def _preferencia(f):                                             # el mismo id en varios archivos: con texto > copia limpia > la más larga
+        return (f.ruta.stat().st_size > 0, "limpio" in str(f.ruta.parent).lower(), f.ruta.stat().st_size)
+    unicas = {}                                                      # (Drive a veces deja «nombre (1).txt» vacío al sincronizar)
     for f in fichas:
         previa = unicas.get(f.id_clase)
-        if previa is None or ("limpio" in str(f.ruta.parent).lower() and "limpio" not in str(previa.ruta.parent).lower()):
+        if previa is None or _preferencia(f) > _preferencia(previa):
             unicas[f.id_clase] = f
     return sorted(unicas.values(), key=lambda f: (NIVELES.index(f.nivel), f.modulo, f.posicion))
 
