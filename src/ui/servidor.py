@@ -142,6 +142,9 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                     return self._json(logica.estado_lote(app.raiz))
                 if ruta == "/api/progreso":
                     return self._json(logica.progreso_en_vivo(app.raiz))
+                if ruta == "/api/poses/cambios":
+                    from src import poses_fuente
+                    return self._json({"cambios": poses_fuente.revisar(app.raiz)})
                 return self._error("No existe esa página", 404)
             except ErrorAccionable as exc:
                 return self._error(str(exc))
@@ -225,6 +228,9 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                     tid = app.tareas.lanzar_comando(f"Lote con {n} trabajadores",
                                                     [sys.executable, "-m", "src.lote", "correr", "--trabajadores", str(n)])
                     return self._json({"tarea": tid})
+                if ruta == "/api/poses/actualizar":
+                    from src import poses_fuente
+                    return self._json(poses_fuente.actualizar(app.raiz))
                 if ruta == "/api/lote/reintentar":
                     from src.lote.cola import Cola
                     return self._json({"reintentadas": Cola(app.raiz / "lote" / "cola.db").reintentar_errores()})

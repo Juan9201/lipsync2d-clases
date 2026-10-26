@@ -3,6 +3,7 @@
 Uso:  python -m src.render --personaje profesor --audio clases\\clase_0001.mp3 [--guion ...]
 """
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import date
@@ -21,6 +22,7 @@ from src.escena import config as escena_cfg_mod
 from src.escena.escena import EscenaLayer
 from src.errores import AssetInvalido
 from src.guion import limpiar_para_analisis
+from src.palabras import detectar_cuentas, tiempos_de_palabras
 from src.layers.base import ContextoFrame
 from src.layers.camara import ventana_plano
 from src.layers.concretas import AnclasEstaticas, BocaLayer, CuerpoLayer, FondoLayer, OjosLayer
@@ -54,6 +56,7 @@ class ParametrosRender:
     director: bool = False
     reglas: Optional[Path] = None      # archivo de reglas (por defecto, reglas_director.yaml del proyecto si existe)
     plano_inicial: Optional[str] = None
+    tramo_s: Optional[Tuple[float, float]] = None   # (desde, hasta) en segundos: se decide y analiza la clase entera pero solo se renderiza ese tramo
 
 
 def _buscar_carpeta(base: Path, prefijo: str, id_pedido: Optional[str]) -> Optional[Path]:
@@ -168,8 +171,14 @@ def _renderizar_clase(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
             if escena_cfg is not None and escena_cfg["poses_permitidas"]:
                 base_admite = admite
                 admite = lambda pose_id, plano: pose_id in escena_cfg["poses_permitidas"] and (base_admite is None or base_admite(pose_id, plano))
+            cuentas = []
+            if texto and any(getattr(q, "cuenta", 0) for q in poses_clase.values()):
+                pal = tiempos_de_palabras(texto, res.cues, res.duracion_s)
+                cuentas = [[(i.n, round(i.t0 * FPS), round(i.t1 * FPS)) for i in sec] for sec in detectar_cuentas(texto, pal)]
+                log.info("Cuentas en el guion: %d (%s)", len(cuentas), "; ".join(
+                    ",".join(f"{i.palabra}@{i.t0:.1f}s" for i in sec) for sec in detectar_cuentas(texto, pal)))
             tomas = dirigir(list(poses_clase.values()), visemas, len(frames), FPS, escenario_id, semilla,
-                            cargar_reglas(ruta_reglas), admite, p.plano_inicial, registro=log.info)
+                            cargar_reglas(ruta_reglas), admite, p.plano_inicial, registro=log.info, cuentas=cuentas)
             log.info("Director: %d tomas, planos %s, poses %d", len(tomas), "/".join(sorted({t.plano for t in tomas})),
                      len({t.pose for t in tomas}))
         elif len(poses_clase) > 1:
@@ -216,18 +225,28 @@ def _renderizar_clase(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
                 compositor = Compositor([fondo, *personaje], (W, H))
 
         final = raiz / "salidas" / f"{clase_id}_{date.today():%Y%m%d}.mp4"
+        f0, f1, audio_salida, duracion_salida = 0, lt.n_frames, audio, info.duracion_s
+        if p.tramo_s is not None:
+            f0 = max(0, min(lt.n_frames - 1, round(p.tramo_s[0] * FPS)))
+            f1 = max(f0 + 1, min(lt.n_frames, round(p.tramo_s[1] * FPS)))
+            final = raiz / "salidas" / f"prueba_{clase_id}_{f0 / FPS:.0f}-{f1 / FPS:.0f}s_{date.today():%Y%m%d}.mp4"
+            audio_salida = raiz / "cache" / "analisis" / f"{clase_id}_tramo.wav"
+            subprocess.run([str(rutas.FFMPEG), "-v", "error", "-y", "-ss", f"{f0 / FPS:.3f}", "-t", f"{(f1 - f0) / FPS:.3f}",
+                            "-i", str(audio), str(audio_salida)], check=True)
+            duracion_salida = (f1 - f0) / FPS
+            log.info("Tramo de prueba: frames %d-%d (%.1f-%.1f s)", f0, f1, f0 / FPS, f1 / FPS)
         with etapa(log, "render_y_encode"):
-            with Codificador(final, audio, W, H, FPS, duracion_esperada_s=info.duracion_s) as enc:
-                decimo = max(1, lt.n_frames // 10)
-                for n in range(lt.n_frames):
+            with Codificador(final, audio_salida, W, H, FPS, duracion_esperada_s=duracion_salida) as enc:
+                decimo = max(1, (f1 - f0) // 10)
+                for n in range(f0, f1):
                     previa, mezcla = lt.mezcla_en(n)
                     ctx = ContextoFrame(n, n / FPS, (W, H), lt.toma_en(n), lt.visema_en(n), lt.parpadeando(n),
                                         float(anim.escala[n]), float(anim.dx[n]), float(anim.dy[n]),
                                         lt.fase_ojos(n), previa, mezcla)
                     enc.escribir(compositor.componer(ctx).tobytes())
-                    progreso.avance(n + 1, lt.n_frames)
-                    if n % decimo == 0:
-                        log.info("  %d %%", 100 * n // lt.n_frames)
+                    progreso.avance(n - f0 + 1, f1 - f0)
+                    if (n - f0) % decimo == 0:
+                        log.info("  %d %%", 100 * (n - f0) // (f1 - f0))
     finally:
         if hasattr(fondo, "cerrar"):
             fondo.cerrar()                  # detiene el decodificador del video de fondo

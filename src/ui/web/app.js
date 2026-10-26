@@ -215,6 +215,29 @@ $("btn-abrir-salidas").onclick = () => seguro(async () => { const r = await api(
 $("btn-lote-reintentar").onclick = () => seguro(async () => { const r = await api("/api/lote/reintentar", {}); avisar(`${r.reintentadas} clase(s) vuelven a la cola.`, true); cargarLote(); });
 $("lote-nombre").placeholder = new Date().toISOString().slice(0, 10) + "-A";
 
+// ---------- actualizar poses ----------
+$("btn-poses").onclick = () => seguro(async () => {
+  const { cambios } = await api("/api/poses/cambios");
+  const listas = cambios.filter(c => c.estado === "actualizable");
+  const otras = cambios.filter(c => c.estado !== "actualizable");
+  if (!cambios.length) return avisar("Todas las imágenes de Torso Organizado ya están en las poses del render.", true);
+  const texto = (listas.length ? `Se actualizarán ${listas.length} pose(s):
+` + listas.map(c => `  • ${c.pose}  (${c.detalle})`).join("
+") + "
+
+" : "")
+    + (otras.length ? "No se tocan:
+" + otras.map(c => `  • ${c.pose}: ${c.detalle}`).join("
+") + "
+
+" : "")
+    + (listas.length ? "Antes se guarda copia de las anteriores en respaldo_poses/. ¿Actualizar?" : "");
+  if (!listas.length) return avisar(texto.trim().slice(0, 600));
+  if (!confirm(texto)) return;
+  const r = await api("/api/poses/actualizar", {});
+  avisar(`${r.actualizadas.length} pose(s) actualizada(s): ${r.actualizadas.join(", ")}.` + (r.pendientes.length ? ` Quedan ${r.pendientes.length} por revisar a mano.` : ""), true);
+});
+
 // ---------- escenarios (fondos) ----------
 async function cargarEscenarios() {
   const e = await api("/api/estado"); estado.escenarios = e.escenarios;

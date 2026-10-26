@@ -79,11 +79,14 @@ def escanear(carpeta: Path, niveles: Optional[Iterable[str]] = None) -> List[Fic
     permitidos = set(niveles) if niveles else set(NIVELES)
     fichas = []
     for p in carpeta.rglob("*.txt"):
+        if any(parte.startswith(("_", ".")) for parte in p.relative_to(carpeta).parts[:-1]):
+            continue                                               # copias de seguridad (_originales…) y carpetas ocultas
         f = leer_nombre(p.name)
         if f and f.nivel in permitidos:
             fichas.append(FichaGuion(f.nivel, f.modulo, f.posicion, f.humano, f.titulo, f.revisar, p))
-    def _preferencia(f):                                             # el mismo id en varios archivos: con texto > copia limpia > la más larga
-        return (f.ruta.stat().st_size > 0, "limpio" in str(f.ruta.parent).lower(), f.ruta.stat().st_size)
+    def _preferencia(f):                                             # el mismo id en varios archivos: con texto > copia limpia > la más reciente
+        e = f.ruta.stat()
+        return (e.st_size > 0, "limpio" in str(f.ruta.parent).lower(), e.st_mtime)
     unicas = {}                                                      # (Drive a veces deja «nombre (1).txt» vacío al sincronizar)
     for f in fichas:
         previa = unicas.get(f.id_clase)

@@ -102,6 +102,7 @@ class Pose:
     parpadeo: bool = False
     parche_ojos: Optional[ParcheOjos] = None         # imágenes de parpadeo importadas (None = la pose no parpadea)
     mirada: str = "camara"                           # «camara» (mira al espectador) o «lateral» (3/4 sin contacto visual)
+    cuenta: int = 0                                  # 1, 2, 3…: pose de «contar» (dedos levantados); el director la usa solo al contar, nunca al azar
 
 
 def espejo_de_forma(pose: "Pose", visema: str) -> bool:
@@ -241,7 +242,7 @@ def _cargar_pose_v3(carpeta: Path, d: dict, cfg_ruta: Path) -> Pose:
                 Movimiento(float(mov.get("respiracion_escala", 0.0)), float(mov.get("cabeza_px", 0.0))), carpeta,
                 False, d.get("ojos_de"), vista, gesto, tipo, variante, formas,
                 (float(pelo[0]), float(pelo[1])) if pelo else None, bool(d.get("parpadeo", False)),
-                _parche_ojos(d, id_carpeta, carpeta), mirada)
+                _parche_ojos(d, id_carpeta, carpeta), mirada, int(d.get("cuenta") or 0))
 
 
 def _ancla(datos: dict, nombre: str, lienzo: Tuple[int, int], ruta: Path) -> Ancla:

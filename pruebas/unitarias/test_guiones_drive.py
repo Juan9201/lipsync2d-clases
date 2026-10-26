@@ -166,3 +166,18 @@ def test_si_drive_deja_una_copia_vacia_del_mismo_guion_se_usa_la_que_tiene_texto
     elegido = [f for f in escanear(drive) if f.id_clase == "A1-M01-2"]
     assert len(elegido) == 1 and elegido[0].ruta == bueno
     assert "A1-M01-2" in importar_carpeta(tmp_path / "p", drive)["creadas"]
+
+
+def test_las_carpetas_de_copia_de_seguridad_con_guion_bajo_se_ignoran_y_ante_duplicados_gana_el_mas_reciente(drive, tmp_path):
+    import os
+    viejo = drive / "_originales_antes_de_aperturas" / "A1" / "A1-M01-2 IA - Alphabet - Vowels.txt"
+    viejo.parent.mkdir(parents=True)
+    viejo.write_text(_guion(palabras=900, hook="Apertura VIEJA, la del respaldo, más larga."), encoding="utf-8")   # más grande que la buena
+    assert all("_originales" not in str(f.ruta) for f in escanear(drive))
+    r = importar_carpeta(tmp_path / "p", drive)
+    assert (tmp_path / "p" / "clases" / "A1-M01-2.txt").read_text(encoding="utf-8").startswith("¿Sabías que…?")
+    # dos copias legítimas del mismo guion fuera de carpetas de respaldo: gana la más reciente
+    otra = drive / "A1" / "A1-M01-3 IA - Alphabet - Names (2).txt"
+    otra.write_text(_guion(hook="Más nueva."), encoding="utf-8")
+    os.utime(otra, (9_999_999_999, 9_999_999_999))
+    assert [f for f in escanear(drive) if f.id_clase == "A1-M01-3"][0].ruta == otra

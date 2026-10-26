@@ -37,6 +37,10 @@ REGLAS_DEFECTO: Dict[str, object] = {
     # «desvio»: desde una pose con contacto visual (…_eye_contact) se aparta la mirada un momento (su gemela de lado) y se vuelve
     "mirada": {"lateral_max_s": 1, "peso_lateral": 0.25,
                "desvio": {"activo": True, "cada_s": [6, 14], "duracion_s": [0.5, 1.0]}},
+    # «cuentas»: cuando el guion cuenta «uno, dos, tres» (o «primero, segundo, tercero») el profesor levanta ese número de dedos
+    # (poses con `cuenta: 1|2|3`). Aparece `anticipo_s` antes de decir el número y se sostiene `sostener_s` tras decirlo (o hasta el
+    # siguiente número si está a menos de `unir_s`); nunca más de `max_s` seguidos.
+    "cuentas": {"activo": True, "anticipo_s": 0.1, "sostener_s": 1.2, "unir_s": 2.5, "max_s": 4.0},
 }
 
 
@@ -90,6 +94,14 @@ def _validar(r: dict, ruta: str) -> dict:
     if not isinstance(m["peso_lateral"], (int, float)) or not 0 < m["peso_lateral"] <= 1:
         raise ErrorAccionable(f"En {ruta}, «peso_lateral» debe estar entre 0 (sin incluir) y 1 (vale {m['peso_lateral']})",
                               "Usa 1 para tratarlas igual que las que miran a cámara, o un valor bajo (0.25) para preferirlas poco")
+    c = r["cuentas"]
+    if not isinstance(c["activo"], bool):
+        raise ErrorAccionable(f"En {ruta}, «cuentas.activo» debe ser true o false", "Escribe activo: true o activo: false")
+    for clave in ("anticipo_s", "sostener_s", "unir_s", "max_s"):
+        if not isinstance(c[clave], (int, float)) or isinstance(c[clave], bool) or c[clave] < 0:
+            raise ErrorAccionable(f"En {ruta}, «cuentas.{clave}» debe ser un número ≥ 0 (vale {c[clave]})", "Escribe segundos, por ejemplo 1.2")
+    if c["max_s"] < 0.5:
+        raise ErrorAccionable(f"En {ruta}, «cuentas.max_s» debe ser al menos 0.5 s (vale {c['max_s']})", "Usa por ejemplo max_s: 4")
     p = r["planos"]
     malos = [x for x in p["permitidos"] if x not in PLANOS_VALIDOS]
     if not p["permitidos"] or malos:
@@ -131,6 +143,10 @@ def cargar_reglas(ruta: Optional[Path] = None, cambios: Optional[dict] = None) -
 # ---------------------------------------------------------------- director
 def _es_acento(p) -> bool:
     return getattr(p, "tipo", "") == "acento"
+
+
+def _es_cuenta(p) -> bool:
+    return int(getattr(p, "cuenta", 0) or 0) > 0
 
 
 def _es_lateral(p) -> bool:
@@ -181,9 +197,68 @@ def _insertar_desvios(tomas: List[Toma], por_id: dict, pausas: List[int], n_fram
     return salida
 
 
+def _insertar_cuentas(tomas: List[Toma], por_id: dict, secuencias: Sequence, n_frames: int, fps: int, escenario: str, reglas: dict,
+                      admite: Callable[[str, str], bool], log: Callable[[str], None]) -> List[Toma]:
+    """Sobrepone a las tomas la pose de «contar» que corresponde a cada número de una cuenta. `secuencias`: listas de (n, f0, f1), con los
+    frames en que se dice el número. Dentro del intervalo la cámara conserva el plano que tenía al empezar; al terminar vuelve la toma que
+    el director había dispuesto."""
+    c = reglas["cuentas"]
+    if not c["activo"] or not secuencias:
+        return tomas
+    por_numero = {}
+    for p in por_id.values():
+        if _es_cuenta(p):
+            por_numero.setdefault(int(p.cuenta), []).append(p)
+    anticipo, sostener, unir, tope = (round(c[k] * fps) for k in ("anticipo_s", "sostener_s", "unir_s", "max_s"))
+
+    def estado_en(f: int) -> Toma:
+        return [t for t in tomas if t.f0 <= f][-1]
+
+    intervalos = []                                   # (f0, f1, pose_id, plano)
+    for seq in secuencias:
+        for k, (n, f0, f1) in enumerate(seq):
+            if n not in por_numero:
+                continue
+            ini = max(0, f0 - anticipo)
+            sig = seq[k + 1] if k + 1 < len(seq) else None
+            fin = f1 + sostener
+            if sig is not None and sig[1] - f1 <= unir:
+                fin = max(fin, sig[1] - anticipo)
+            fin = min(fin, ini + tope, n_frames)
+            plano = estado_en(ini).plano
+            pose = next((p for p in por_numero[n] if admite(p.id, plano)), None)
+            if pose is None or fin - ini < 2:
+                continue
+            if intervalos and ini < intervalos[-1][1]:            # no se pisan: el anterior se corta donde empieza este
+                a0, _, a_pose, a_plano = intervalos[-1]
+                intervalos[-1] = (a0, ini, a_pose, a_plano)
+                if ini - a0 < 2:
+                    intervalos.pop()
+            intervalos.append((ini, fin, pose.id, plano))
+            log(f"cuenta: «{seq[k][0]}» frames {ini}-{fin} ({ini / fps:.1f}-{fin / fps:.1f} s) - pose {pose.id}, plano {plano}")
+    if not intervalos:
+        return tomas
+    puntos = sorted({t.f0 for t in tomas} | {a for a, _, _, _ in intervalos} | {b for _, b, _, _ in intervalos if b < n_frames})
+    mezcla_def = reglas["reposo"]["mezcla_frames"] if reglas["reposo"]["activo"] else 0
+    salida: List[Toma] = []
+    for f in puntos:
+        iv = next((x for x in intervalos if x[0] <= f < x[1]), None)
+        if iv is not None:
+            nueva = Toma(f, escenario, iv[2], iv[3], 2 if f == iv[0] or (salida and salida[-1].pose != iv[2]) else 0)
+        else:
+            o = estado_en(f)
+            volviendo = bool(salida) and any(b == f for _, b, _, _ in intervalos)
+            nueva = Toma(f, o.escenario, o.pose, o.plano, mezcla_def if volviendo else o.mezcla if o.f0 == f else 0)
+        if salida and (salida[-1].pose, salida[-1].plano) == (nueva.pose, nueva.plano):
+            continue
+        salida.append(nueva)
+    return salida
+
+
 def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int, escenario: str, semilla: int,
             reglas: Optional[dict] = None, admite: Optional[Callable[[str, str], bool]] = None,
-            plano_inicial: Optional[str] = None, registro: Optional[Callable[[str], None]] = None) -> List[Toma]:
+            plano_inicial: Optional[str] = None, registro: Optional[Callable[[str], None]] = None,
+            cuentas: Optional[Sequence] = None) -> List[Toma]:
     """Devuelve las tomas de la clase. `poses`: objetos con `id`, `vista`, `gesto`, `tipo` ("estado" o "acento"); la
     primera es la pose de partida. `admite(pose, plano)` aplica las restricciones del escenario (FR-092)."""
     reglas = reglas or cargar_reglas(None)
@@ -193,8 +268,9 @@ def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int,
     poses = list(poses)
     if not poses:
         raise ErrorAccionable("El director no tiene ninguna pose para elegir", "Indica al menos una pose")
-    estados = [p for p in poses if not _es_acento(p)] or poses
-    acentos = [p for p in poses if _es_acento(p)] if estados is not poses else []
+    libres = [p for p in poses if not _es_cuenta(p)] or poses         # las poses de contar solo salen al contar (`cuentas`)
+    estados = [p for p in libres if not _es_acento(p)] or libres
+    acentos = [p for p in libres if _es_acento(p)] if estados is not libres else []
     pl = reglas["planos"]
     permitidos = sorted(pl["permitidos"], key=PLANOS_VALIDOS.index)
     inicial = plano_inicial or pl["inicial"]
@@ -297,4 +373,5 @@ def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int,
         log(f"toma {len(tomas)}: frame {corte} ({corte / fps:.1f} s) - pose {vieja.id} -> {nueva.id}, plano {plano} ({motivo})")
         pose = por_id[nueva.id]
         f = corte
-    return _insertar_desvios(tomas, por_id, pausas, n_frames, fps, escenario, semilla, reglas, admite, tol, log)
+    tomas = _insertar_desvios(tomas, por_id, pausas, n_frames, fps, escenario, semilla, reglas, admite, tol, log)
+    return _insertar_cuentas(tomas, por_id, cuentas or [], n_frames, fps, escenario, reglas, admite, log)
