@@ -28,7 +28,7 @@ async function seguro(fn) { try { return await fn(); } catch (e) { avisar(e.mess
 for (const b of document.querySelectorAll("#pestanas button")) b.onclick = () => {
   document.querySelectorAll("#pestanas button").forEach(x => x.classList.toggle("activa", x === b));
   for (const s of document.querySelectorAll("main > section")) s.hidden = s.id !== "p-" + b.dataset.p;
-  if (b.dataset.p === "lote") cargarLote();
+  if (b.dataset.p === "lote") { cargarLote(); cargarPublicacion(); }
   if (b.dataset.p === "escenarios") cargarEscenarios();
 };
 
@@ -211,6 +211,17 @@ $("btn-lote-correr").onclick = () => seguro(async () => {
   await api("/api/lote/correr", { trabajadores: +$("lote-trab").value }); avisar("Lote en marcha. Mira el avance aquí abajo.", true); sondear();
   const refrescar = setInterval(() => { if (!document.querySelector('#p-lote').hidden) cargarLote(); }, 5000); setTimeout(() => clearInterval(refrescar), 3600000);
 });
+async function cargarPublicacion() {
+  const p = await api("/api/publicacion");
+  const cuenta = {}; p.clases.forEach(c => cuenta[c.estado] = (cuenta[c.estado] || 0) + 1);
+  $("pub-resumen").textContent = p.clases.length ? "· " + Object.entries(cuenta).map(([k, v]) => `${v} ${k}`).join(" · ") + " · Drive: " + p.drive : "· nada aún · Drive: " + p.drive;
+  document.querySelector("#tabla-pub tbody").replaceChildren(...p.clases.slice(-60).reverse().map(c => h("tr", {},
+    h("td", {}, c.id), h("td", {}, c.origen === "humano" ? "humana" : "IA"),
+    h("td", { class: c.estado === "publicado" ? "ok" : c.estado === "error" ? "mal" : "" }, c.estado),
+    h("td", {}, c.error ? c.error.slice(0, 120) : (c.destino || "")))));
+}
+$("btn-pub-correr").onclick = () => seguro(async () => { await api("/api/publicacion/correr", {}); avisar("Subtitulando lo pendiente. Mira el avance en «En vivo».", true); sondear(); cargarPublicacion(); });
+$("btn-pub-reintentar").onclick = () => seguro(async () => { const r = await api("/api/publicacion/reintentar", {}); avisar(`${r.reintentadas} clase(s) vuelven a la cola de subtítulos.`, true); cargarPublicacion(); });
 $("btn-abrir-salidas").onclick = () => seguro(async () => { const r = await api("/api/salidas/abrir", {}); avisar("Carpeta de videos: " + r.carpeta, true); });
 $("btn-lote-reintentar").onclick = () => seguro(async () => { const r = await api("/api/lote/reintentar", {}); avisar(`${r.reintentadas} clase(s) vuelven a la cola.`, true); cargarLote(); });
 $("lote-nombre").placeholder = new Date().toISOString().slice(0, 10) + "-A";

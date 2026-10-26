@@ -142,6 +142,10 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                     return self._json(logica.estado_lote(app.raiz))
                 if ruta == "/api/progreso":
                     return self._json(logica.progreso_en_vivo(app.raiz))
+                if ruta == "/api/publicacion":
+                    from src import publicar
+                    return self._json({"clases": publicar.Registro(app.raiz / "lote" / "publicacion.db").todas(),
+                                       "drive": publicar.cargar_config(app.raiz)["drive"]})
                 if ruta == "/api/poses/cambios":
                     from src import poses_fuente
                     return self._json({"cambios": poses_fuente.revisar(app.raiz)})
@@ -222,12 +226,22 @@ def crear_servidor(raiz: Path, puerto: int = 8780) -> ThreadingHTTPServer:
                     r = logica.preparar_produccion(app.raiz, d.get("ids") or [], str(d.get("escenario") or ""))
                     tid = app.tareas.lanzar_comando(f"Lote {r['lote']} · {r['encoladas'] + r['ya_estaban']} clases · {n} trabajadores",
                                                     [sys.executable, "-m", "src.lote", "correr", "--trabajadores", str(n)])
-                    return self._json({**r, "tarea": tid, "trabajadores": n})
+                    sub = None
+                    if d.get("subtitular", True) and not any(t["estado"] == "en curso" and str(t["titulo"]).startswith("Subtítulos") for t in app.tareas.listar()):
+                        sub = app.tareas.lanzar_comando("Subtítulos y Drive · en cuanto termine cada clase", [sys.executable, "-m", "src.publicar", "correr"])
+                    return self._json({**r, "tarea": tid, "trabajadores": n, "subtitulos": sub})
                 if ruta == "/api/lote/correr":
                     n = max(1, min(int(d.get("trabajadores") or 2), 8))
                     tid = app.tareas.lanzar_comando(f"Lote con {n} trabajadores",
                                                     [sys.executable, "-m", "src.lote", "correr", "--trabajadores", str(n)])
                     return self._json({"tarea": tid})
+                if ruta == "/api/publicacion/correr":
+                    if any(t["estado"] == "en curso" and str(t["titulo"]).startswith("Subtítulos") for t in app.tareas.listar()):
+                        raise ErrorAccionable("Ya se están subtitulando clases", "Mira el avance en el panel «En vivo»")
+                    return self._json({"tarea": app.tareas.lanzar_comando("Subtítulos y Drive · lo pendiente", [sys.executable, "-m", "src.publicar", "correr", "--una-vez"])})
+                if ruta == "/api/publicacion/reintentar":
+                    from src import publicar
+                    return self._json({"reintentadas": publicar.Registro(app.raiz / "lote" / "publicacion.db").reintentar()})
                 if ruta == "/api/poses/actualizar":
                     from src import poses_fuente
                     return self._json(poses_fuente.actualizar(app.raiz))

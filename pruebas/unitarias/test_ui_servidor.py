@@ -187,14 +187,21 @@ def test_producir_asigna_el_escenario_arma_el_lote_y_arranca_los_trabajadores(pr
     assert codigo == 200 and r["encoladas"] == 2 and r["ya_estaban"] == 0 and r["lote"].startswith("prod-")
     assert _json.loads((raiz / "clases" / "A1-M01-1.json").read_text(encoding="utf-8"))["escenarios"] == "E2"
     assert _json.loads((raiz / "clases" / "A1-M01-3.json").read_text(encoding="utf-8"))["escenarios"] == ""     # las no marcadas no se tocan
+    assert len(lanzados) == 2 and lanzados[0][1][-3:] == ["correr", "--trabajadores", "2"]
+    assert lanzados[1][1][-2:] == ["src.publicar", "correr"]     # y los subtítulos arrancan solos
+
+
+def test_producir_sin_subtitulos_solo_lanza_el_render(produccion):
+    raiz, url, lanzados = produccion
+    assert _post(url, "/api/producir", {"ids": ["A1-M01-1"], "escenario": "", "subtitular": False})[0] == 200
     assert len(lanzados) == 1 and lanzados[0][1][-3:] == ["correr", "--trabajadores", "2"]
 
 
 def test_producir_sin_escenario_deja_el_automatico_y_repetir_no_duplica(produccion):
     raiz, url, lanzados = produccion
-    assert _post(url, "/api/producir", {"ids": ["A1-M01-1"], "escenario": ""})[0] == 200
+    assert _post(url, "/api/producir", {"ids": ["A1-M01-1"], "escenario": "", "subtitular": False})[0] == 200
     lanzados.clear()
-    codigo, r = _post(url, "/api/producir", {"ids": ["A1-M01-1", "A1-M01-3"], "escenario": ""})
+    codigo, r = _post(url, "/api/producir", {"ids": ["A1-M01-1", "A1-M01-3"], "escenario": "", "subtitular": False})
     assert codigo == 200 and r["encoladas"] == 1 and r["ya_estaban"] == 1 and len(lanzados) == 1
 
 
@@ -204,7 +211,7 @@ def test_producir_rechaza_pedidos_incorrectos_sin_lanzar_nada(produccion):
     codigo, r = _post(url, "/api/producir", {"ids": ["A1-M01-1"], "escenario": "E9"})
     assert codigo == 400 and "E9" in r["error"]
     assert _post(url, "/api/producir", {"ids": ["no-existe"]})[0] == 400
-    assert _post(url, "/api/producir", {"ids": ["A1-M01-1"], "trabajadores": 99})[0] == 200               # se limita a 1–4, no falla
+    assert _post(url, "/api/producir", {"ids": ["A1-M01-1"], "trabajadores": 99, "subtitular": False})[0] == 200               # se limita a 1–4, no falla
     assert lanzados[-1][1][-1] == "4"
     assert len(lanzados) == 1
 

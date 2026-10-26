@@ -1,0 +1,7 @@
+# Estilo de los subtítulos (herramienta de subtítulos, http://127.0.0.1:3003). Lo que no escribas aquí conserva el valor por defecto.
+preset: highlight                         # Resalte
+font: HankenGrotesk-VariableFont_wght
+size: md                                  # Mediano
+position: bottom                          # Abajo
+es_highlight_color: "#22C55E"             # español: verde
+en_highlight_color: "#0094FF"             # inglés: azul

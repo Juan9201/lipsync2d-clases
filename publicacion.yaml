@@ -1,0 +1,5 @@
+# Dónde termina cada clase: Drive\<Nivel>\<Mxx>\<clase>_subtitulado.mp4 (+ .srt). Las clases humanas se dejan en `entrada_humano`
+# con el id al principio del nombre (A1-M01-1 grabación.mp4); al terminar, el original pasa a la carpeta «procesadas» de al lado.
+drive: "G:/My Drive/Clases renderizadas"
+entrada_humano: "G:/My Drive/Clases humano/entrada"
+conservar_local: true          # también queda una copia en salidas/subtitulados/
