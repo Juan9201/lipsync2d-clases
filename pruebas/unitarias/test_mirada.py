@@ -132,7 +132,7 @@ def test_tras_una_pose_de_lado_siempre_cambia_la_pose_no_solo_el_plano():
 def test_las_poses_que_miran_de_lado_se_eligen_mucho_menos_que_las_de_contacto_visual():
     por_pose = Counter()
     for semilla in range(14):
-        por_pose.update(t.pose for t in _tomas(CAMARA + LATERAL, semilla)[1:])
+        por_pose.update(t.pose for t in _tomas(CAMARA + LATERAL, semilla, {"mirada": {"desvio": {"activo": False}}})[1:])
     lat = sum(por_pose[p.id] for p in LATERAL) / len(LATERAL)
     cam = sum(por_pose[p.id] for p in CAMARA) / len(CAMARA)
     assert lat < 0.35 * cam, (dict(por_pose),)
@@ -159,5 +159,77 @@ def test_sin_atributo_mirada_las_poses_cuentan_como_de_contacto_visual():
 
 @pytest.mark.parametrize("cambio", [{"mirada": {"lateral_max_s": -1}}, {"mirada": {"peso_lateral": 0}}, {"mirada": {"peso_lateral": 1.5}}])
 def test_las_reglas_de_mirada_invalidas_se_rechazan(cambio):
+    with pytest.raises(ErrorAccionable):
+        cargar_reglas(None, cambio)
+
+
+# ---------------------------------------------------------------- mirada desviada (EC → su gemela de lado ≤ 1 s → EC)
+EC = _p("tres_cuartos_der_neutro_01_eye_contact", "camara")
+GEMELA = _p("tres_cuartos_der_neutro_01", "lateral")
+FRONTAL = [_p("frontal_neutro_01", "camara"), _p("frontal_explicar_01", "camara")]
+DESVIO = {"mirada": {"peso_lateral": 0.0001, "desvio": {"cada_s": [6, 14], "duracion_s": [0.5, 1.0]}}}   # la gemela casi nunca sale por reparto
+
+
+def _desvios(tomas):
+    """(inicio, duración en s, toma anterior, toma siguiente) de cada vez que la gemela de lado aparece entre dos tomas de contacto visual."""
+    fin = [t.f0 for t in tomas[1:]] + [N]
+    salida = []
+    for i in range(1, len(tomas) - 1):
+        if tomas[i].pose == GEMELA.id and tomas[i - 1].pose == EC.id and tomas[i + 1].pose == EC.id:
+            salida.append((tomas[i].f0, (fin[i] - tomas[i].f0) / FPS, tomas[i - 1], tomas[i + 1]))
+    return salida
+
+
+def test_la_mirada_desviada_dura_un_segundo_o_menos_y_vuelve_a_la_misma_pose_y_plano():
+    hallados = []
+    for semilla in range(6):
+        hallados += _desvios(_tomas([EC, GEMELA] + FRONTAL, semilla, DESVIO))
+    assert len(hallados) >= 12, len(hallados)
+    for f0, dur, antes, despues in hallados:
+        assert 0.4 <= dur <= 1.05, dur
+        assert despues.plano == antes.plano
+
+
+def test_la_mirada_desviada_no_cae_recien_cortada_la_pose_ni_justo_antes_de_cambiar_y_se_espacia():
+    for semilla in range(6):
+        tomas = _tomas([EC, GEMELA] + FRONTAL, semilla, DESVIO)
+        fin = {t.f0: (tomas[i + 1].f0 if i + 1 < len(tomas) else N) for i, t in enumerate(tomas)}
+        previos = []
+        for f0, dur, antes, despues in _desvios(tomas):
+            assert f0 >= antes.f0 + 1.4 * FPS
+            siguiente = [t.f0 for t in tomas if t.f0 > despues.f0]
+            assert not siguiente or siguiente[0] - (f0 + dur * FPS) >= 0.9 * FPS
+            previos.append(f0)
+        assert all(b - a >= 5.5 * FPS for a, b in zip(previos, previos[1:])), previos
+
+
+def test_sin_desvio_activo_no_hay_mirada_desviada():
+    reglas = {"mirada": {**DESVIO["mirada"], "desvio": {"activo": False}}}
+    assert sum(len(_desvios(_tomas([EC, GEMELA] + FRONTAL, s, reglas))) for s in range(6)) == 0
+
+
+def test_una_pose_con_contacto_visual_sin_gemela_de_lado_no_se_desvia():
+    sin_gemela = [_p("tres_cuartos_der_libreta_01_eye_contact", "camara")] + FRONTAL
+    for s in range(4):
+        t = _tomas(sin_gemela, s, DESVIO)
+        assert all(not x.pose.startswith("tres_cuartos_der_libreta_01") or x.pose.endswith("eye_contact") for x in t)
+
+
+def test_la_mirada_desviada_es_reproducible_con_la_semilla():
+    a, b = _tomas([EC, GEMELA] + FRONTAL, 4, DESVIO), _tomas([EC, GEMELA] + FRONTAL, 4, DESVIO)
+    assert [(x.f0, x.pose, x.plano) for x in a] == [(x.f0, x.pose, x.plano) for x in b]
+
+
+def test_el_tiempo_de_lado_es_poco_con_el_desvio_activo():
+    lado = 0.0
+    for s in range(8):
+        t = _tomas([EC, GEMELA] + FRONTAL, s, DESVIO)
+        lado += sum(d for p, d in _duraciones(t) if p == GEMELA.id)
+    assert lado / (8 * N / FPS) < 0.12
+
+
+@pytest.mark.parametrize("cambio", [{"mirada": {"desvio": {"cada_s": [10, 3]}}}, {"mirada": {"desvio": {"duracion_s": [0, 1]}}},
+                                    {"mirada": {"desvio": {"duracion_s": [0.5, 9]}}}, {"mirada": {"desvio": {"activo": "si"}}}])
+def test_las_reglas_del_desvio_invalidas_se_rechazan(cambio):
     with pytest.raises(ErrorAccionable):
         cargar_reglas(None, cambio)

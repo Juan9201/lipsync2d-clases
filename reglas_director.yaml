@@ -25,6 +25,10 @@ acentos:                   # gestos breves (pulgar, señalar, bienvenida, contar
   duracion_s: [3, 6]
   separacion_min_s: 20     # como mínimo, tantos segundos entre dos acentos
 
-mirada:                    # poses 3/4 sin contacto visual (las 3/4 que NO terminan en _eye_contact miran hacia un lado)
-  lateral_max_s: 4         # una pose que mira de lado no dura más de esto (0 = sin límite); tras ella siempre cambia la pose
-  peso_lateral: 0.25       # cuánto se prefiere frente a una pose que mira a cámara (1.0). 1 = las trata igual
+mirada:                    # poses 3/4: las que terminan en _eye_contact miran a cámara; las demás 3/4 miran hacia un lado
+  lateral_max_s: 1         # una pose que mira de lado dura como mucho esto (0 = sin límite); tras ella siempre cambia la pose
+  peso_lateral: 0.25       # cuánto se prefiere al elegir una pose nueva frente a una que mira a cámara (1.0). 1 = las trata igual
+  desvio:                  # mirada desviada: desde una pose _eye_contact se pasa un instante a su gemela de lado y se vuelve (como apartar los ojos al hablar)
+    activo: true
+    cada_s: [6, 14]        # cada cuántos segundos (mínimo, máximo)
+    duracion_s: [0.5, 1.0] # cuánto dura el desvío (máximo permitido: 3 s)
