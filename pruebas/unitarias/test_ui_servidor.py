@@ -222,3 +222,16 @@ def test_producir_no_arranca_otro_lote_si_ya_hay_uno_corriendo(produccion, monke
     monkeypatch.setattr(logica.Tareas, "listar", lambda self: [{"titulo": "Lote con 2 trabajadores", "estado": "en curso"}])
     codigo, r = _post(url, "/api/producir", {"ids": ["A1-M01-1"]})
     assert codigo == 400 and "ya hay un lote" in r["error"].lower() and lanzados == []
+
+
+def test_el_javascript_de_la_interfaz_no_tiene_errores_de_sintaxis():
+    """Un error de sintaxis en app.js deja TODOS los botones muertos sin avisar: se comprueba con node si está instalado."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node no está instalado")
+    ruta = Path(__file__).resolve().parents[2] / "src" / "ui" / "web" / "app.js"
+    r = subprocess.run([node, "--check", str(ruta)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[:400]

@@ -232,19 +232,12 @@ $("btn-poses").onclick = () => seguro(async () => {
   const listas = cambios.filter(c => c.estado === "actualizable");
   const otras = cambios.filter(c => c.estado !== "actualizable");
   if (!cambios.length) return avisar("Todas las imágenes de Torso Organizado ya están en las poses del render.", true);
-  const texto = (listas.length ? `Se actualizarán ${listas.length} pose(s):
-` + listas.map(c => `  • ${c.pose}  (${c.detalle})`).join("
-") + "
-
-" : "")
-    + (otras.length ? "No se tocan:
-" + otras.map(c => `  • ${c.pose}: ${c.detalle}`).join("
-") + "
-
-" : "")
-    + (listas.length ? "Antes se guarda copia de las anteriores en respaldo_poses/. ¿Actualizar?" : "");
-  if (!listas.length) return avisar(texto.trim().slice(0, 600));
-  if (!confirm(texto)) return;
+  const partes = [];
+  if (listas.length) partes.push(`Se actualizarán ${listas.length} pose(s):\n` + listas.map(c => `  • ${c.pose}  (${c.detalle})`).join("\n"));
+  if (otras.length) partes.push("No se tocan:\n" + otras.map(c => `  • ${c.pose}: ${c.detalle}`).join("\n"));
+  if (!listas.length) return avisar(partes.join(" ").slice(0, 600));
+  partes.push("Antes se guarda copia de las anteriores en respaldo_poses/. ¿Actualizar?");
+  if (!confirm(partes.join("\n\n"))) return;
   const r = await api("/api/poses/actualizar", {});
   avisar(`${r.actualizadas.length} pose(s) actualizada(s): ${r.actualizadas.join(", ")}.` + (r.pendientes.length ? ` Quedan ${r.pendientes.length} por revisar a mano.` : ""), true);
 });
