@@ -764,7 +764,7 @@
  },
  "parpadeo": {
   "modo": "por_pose",
-  "borde_suave_px": 10,
+  "borde_suave_px": 30,
   "imagenes": {
    "tres_cuartos_der_bienvenida_01": {
     "archivo": "tres_cuartos_der_bienvenida_01_cerrado.jpg",
@@ -806,8 +806,8 @@
     "archivo": "tres_cuartos_der_explicar_01_cerrado.jpg",
     "original": "tres_cuartos_der_explicar_01_parpadeo.png",
     "centro": [
-     1936.2,
-     167.3
+     1934.3,
+     162.5
     ],
     "desp": [
      0,
@@ -830,8 +830,8 @@
     "archivo": "tres_cuartos_der_libreta_02_cerrado.jpg",
     "original": "tres_cuartos_der_libreta_02_parpadeo.png",
     "centro": [
-     1953.8,
-     173.9
+     1954.2,
+     170.5
     ],
     "desp": [
      0,
@@ -890,8 +890,8 @@
     "archivo": "tres_cuartos_der_señalar_01_cerrado.jpg",
     "original": "tres_cuartos_der_señalar_01_parpadeo.png",
     "centro": [
-     1808.9,
-     164.6
+     1809.5,
+     163.4
     ],
     "desp": [
      0,
