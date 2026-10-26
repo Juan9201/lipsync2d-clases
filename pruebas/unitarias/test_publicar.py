@@ -116,3 +116,40 @@ def test_si_drive_no_esta_la_clase_queda_subtitulada_y_se_publica_despues(tmp_pa
     llamadas = []
     publicar.procesar_una(raiz, reg, cfg, _falso(llamadas))
     assert reg.todas()[0]["estado"] == "publicado" and llamadas == []                         # no se vuelve a subtitular
+
+
+def test_una_clase_atascada_en_la_copia_no_bloquea_a_las_demas_y_acaba_en_error(tmp_path, monkeypatch):
+    raiz = _raiz(tmp_path)
+    for n in (2, 3):
+        (raiz / "salidas" / f"A1-M05-{n}_20261026.mp4").write_bytes(b"x")
+    _cola(raiz, [(f"A1-M05-{n}", "hecho", str(raiz / "salidas" / f"A1-M05-{n}_20261026.mp4")) for n in (2, 3)])
+    real = publicar._copiar_a_drive
+    def copiar(origen, destino):
+        if "A1-M05-2" in origen.name:
+            raise ErrorAccionable("La copia quedó incompleta", "reintenta")
+        real(origen, destino)
+    monkeypatch.setattr(publicar, "_copiar_a_drive", copiar)
+    r = publicar.correr(raiz, una_vez=True, subtitular=_falso(), espera_s=0)
+    reg = publicar.Registro(raiz / "lote" / "publicacion.db")
+    assert {f["id"]: f["estado"] for f in reg.todas()} == {"A1-M05-2": "error", "A1-M05-3": "publicado"}
+    assert [f for f in reg.todas() if f["id"] == "A1-M05-2"][0]["intentos"] == publicar.MAX_INTENTOS
+    assert r["publicadas"] == 1 and r["con_error"] == 1
+
+
+def test_la_copia_espera_a_que_drive_informe_el_tamano_completo(tmp_path, monkeypatch):
+    origen = tmp_path / "v.mp4"; origen.write_bytes(b"x" * 1000)
+    destino = tmp_path / "gd" / "v.mp4"
+    llamadas = {"n": 0}
+    real_stat = type(origen).stat
+    def stat(self, *a, **k):
+        r = real_stat(self, *a, **k)
+        if self.name.endswith(".part") and llamadas["n"] < 2:                      # Drive: al principio informa un tamaño parcial
+            llamadas["n"] += 1
+            class Parcial:
+                st_size = 512
+            return Parcial()
+        return r
+    monkeypatch.setattr(type(origen), "stat", stat)
+    monkeypatch.setattr(publicar.time, "sleep", lambda s: None)
+    publicar._copiar_a_drive(origen, destino)
+    assert destino.read_bytes() == b"x" * 1000 and llamadas["n"] == 2

@@ -34,6 +34,8 @@ CONFIG_DEFECTO = {
 }
 _ID = re.compile(r"^([AB][12])-M(\d{2})-(\d)(?![\d])")
 _VIDEO = {".mp4", ".mov", ".mkv", ".webm", ".avi"}
+ESPERA_TAMANO_S = 60.0
+MAX_INTENTOS = 4                  # tras tantos fallos seguidos la clase pasa a «error» y deja de bloquear a las demás
 
 _ESQUEMA = """
 CREATE TABLE IF NOT EXISTS pub (
@@ -94,7 +96,8 @@ class Registro:
     def siguiente(self, estados=("pendiente", "subtitulado")) -> Optional[sqlite3.Row]:
         with self._con() as c:
             marcas = ",".join("?" * len(estados))
-            return c.execute(f"SELECT * FROM pub WHERE estado IN ({marcas}) ORDER BY (estado='subtitulado') DESC, orden LIMIT 1",
+            # primero lo que no ha fallado: una clase atascada nunca bloquea a las demás
+            return c.execute(f"SELECT * FROM pub WHERE estado IN ({marcas}) ORDER BY (error != ''), (estado='subtitulado') DESC, orden LIMIT 1",
                              estados).fetchone()
 
     def poner(self, id_clase: str, **campos) -> None:
@@ -145,6 +148,10 @@ def _copiar_a_drive(origen: Path, destino: Path) -> None:
     destino.parent.mkdir(parents=True, exist_ok=True)
     parcial = destino.with_name("." + destino.name + ".part")
     shutil.copyfile(origen, parcial)
+    # Drive para escritorio informa un tamaño parcial (múltiplo de 1 MiB) un instante después de copiar: se espera a que se asiente
+    limite = time.monotonic() + ESPERA_TAMANO_S
+    while parcial.stat().st_size != origen.stat().st_size and time.monotonic() < limite:
+        time.sleep(1.0)
     if parcial.stat().st_size != origen.stat().st_size:
         parcial.unlink(missing_ok=True)
         raise ErrorAccionable(f"La copia de {origen.name} a Drive quedó incompleta", "Reintenta; revisa el espacio y la conexión de Drive")
@@ -200,7 +207,8 @@ def procesar_una(raiz: Path, registro: Registro, cfg: dict, subtitular: Optional
         seg.cerrar("hecha")
     except Exception as exc:                                           # un fallo de una clase no detiene a las demás
         mensaje = str(exc) if isinstance(exc, ErrorAccionable) else f"{type(exc).__name__}: {exc}"
-        registro.poner(id_clase, estado="error" if estado == "pendiente" else "subtitulado", error=mensaje[:400])
+        agotada = fila["intentos"] + 1 >= MAX_INTENTOS
+        registro.poner(id_clase, estado="error" if estado == "pendiente" or agotada else "subtitulado", error=mensaje[:400])
         seg.cerrar("error", mensaje)
     return id_clase
 

@@ -14,6 +14,7 @@ from typing import Callable, Iterator, List, Optional
 from src import registro
 
 INTERVALO_AVANCE_S = 0.2            # como mucho cinco escrituras por segundo del avance de cuadros
+LATIDO_S = 30                       # mientras el trabajo vive, el seguimiento se reescribe cada tanto (aunque no haya avances)
 CADUCIDAD_S = 120                   # sin actualizarse en tanto tiempo, un trabajo «en curso» pasa a «sin señal» (proceso caído)
 MAX_EDAD_S = 24 * 3600
 
@@ -106,6 +107,14 @@ def con_seguimiento(raiz: Path, clase: str, reloj: Callable[[], float] = time.ti
     s = SeguimientoClase(raiz, clase, reloj)
     _actual = s
     registro.escuchar(s._evento)
+    parar = threading.Event()
+
+    def latido() -> None:                      # una etapa larga sin avances (la voz, la cola de subtítulos) no debe verse como «sin señal»
+        while not parar.wait(LATIDO_S):
+            if s.estado == "en_curso":
+                s._escribir()
+
+    threading.Thread(target=latido, daemon=True).start()
     try:
         yield s
     except BaseException as exc:
@@ -114,6 +123,7 @@ def con_seguimiento(raiz: Path, clase: str, reloj: Callable[[], float] = time.ti
     else:
         s.cerrar("hecha")
     finally:
+        parar.set()
         registro.dejar_de_escuchar(s._evento)
         _actual = None
 
