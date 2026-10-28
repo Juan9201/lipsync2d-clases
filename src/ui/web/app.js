@@ -480,7 +480,11 @@ async function consultarVivo() {
     const d = await api("/api/progreso");
     vivo.clases = d.clases; vivo.desfase = Date.now() - d.ahora_ms; vivo.hayEnCurso = d.clases.some(c => c.estado === "en_curso");
     pintarVivo();
-  } catch (e) { /* sin servidor un momento: se reintenta */ }
+  } catch (e) {                                                   // sin servidor: los cronómetros seguirían corriendo solos, así que se avisa
+    vivo.hayEnCurso = false;
+    $("envivo-nota").textContent = "⚠ sin conexión con la interfaz: los tiempos que ves ya no son reales. ¿Se apagó? Ejecuta iniciar_todo.ps1 -Lote";
+    $("envivo").hidden = false;
+  }
   setTimeout(consultarVivo, vivo.hayEnCurso ? 400 : 3000);
 }
 setInterval(tic, 33);
