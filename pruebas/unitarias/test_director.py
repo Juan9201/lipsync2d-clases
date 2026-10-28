@@ -1,5 +1,6 @@
 """T068, T069, T101 (FR-044 a FR-046, FR-090 a FR-094): el director elige las tomas — pose, plano de la cámara virtual y
 momento del corte — con reglas, reproducibles con la semilla, y las reglas se ajustan en un archivo."""
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -80,7 +81,7 @@ def test_no_repite_la_misma_pose_dos_tomas_seguidas_cuando_cambia_de_pose():
 
 
 def test_el_plano_cambia_de_un_paso_y_solo_usa_los_permitidos():
-    tomas = _dirigir()
+    tomas = _dirigir(reglas={"planos": {"paso_maximo": 1}})
     permitidos = REGLAS_DEFECTO["planos"]["permitidos"]
     assert {t.plano for t in tomas} <= set(permitidos)
     assert len({t.plano for t in tomas}) >= 3                  # la cámara realmente varía
@@ -168,7 +169,7 @@ def test_la_mezcla_se_puede_apagar():
 def test_las_reglas_por_defecto_son_validas_y_estan_completas():
     r = cargar_reglas(None)
     assert r["toma_s"] == [6, 20] and r["acentos"]["duracion_s"] == [3, 6] and r["acentos"]["separacion_min_s"] == 20
-    assert r["reposo"]["mezcla_frames"] == 2 and r["planos"]["paso_maximo"] == 1
+    assert r["reposo"]["mezcla_frames"] == 2 and r["planos"]["paso_maximo"] == 2 and r["planos"]["max_mismo_s"] == 25
 
 
 def test_el_archivo_de_reglas_cambia_el_comportamiento_sin_tocar_el_codigo(tmp_path):
@@ -179,7 +180,7 @@ def test_el_archivo_de_reglas_cambia_el_comportamiento_sin_tocar_el_codigo(tmp_p
     assert len(pocas) < base / 2
     ruta.write_text(yaml.safe_dump({"planos": {"permitidos": ["PL4"], "inicial": "PL4"}}), encoding="utf-8")
     assert {t.plano for t in dirigir(POSES, _visemas(), N, FPS, "E1", 1, cargar_reglas(ruta))} == {"PL4"}
-    ruta.write_text(yaml.safe_dump({"cambio": {"prob_plano": 0.0}}), encoding="utf-8")
+    ruta.write_text(yaml.safe_dump({"cambio": {"prob_plano": 0.0}, "planos": {"max_mismo_s": 0}}), encoding="utf-8")
     solo_poses = dirigir(POSES, _visemas(), N, FPS, "E1", 1, cargar_reglas(ruta))
     assert len({t.plano for t in solo_poses}) == 1
 
@@ -248,3 +249,38 @@ def test_evitar_volver_fuera_de_rango_se_rechaza(tmp_path):
     with pytest.raises(ErrorAccionable) as exc:
         cargar_reglas(ruta)
     assert "evitar_volver" in str(exc.value)
+
+
+def _planos_de(tomas, n_frames, fps):
+    """Segundos que cada plano estuvo en pantalla y el tramo continuo más largo en un mismo plano."""
+    tiempo, seguido, ini, prev = {}, 0, 0, None
+    for a, b in zip(tomas, [*tomas[1:], type("F", (), {"f0": n_frames})()]):
+        tiempo[a.plano] = tiempo.get(a.plano, 0) + (b.f0 - a.f0) / fps
+    for t in tomas:
+        if t.plano != prev:
+            if prev is not None:
+                seguido = max(seguido, (t.f0 - ini) / fps)
+            prev, ini = t.plano, t.f0
+    return tiempo, max(seguido, (n_frames - ini) / fps)
+
+
+def test_max_mismo_s_obliga_a_cambiar_de_plano_y_las_reglas_del_proyecto_usan_los_cinco():
+    from types import SimpleNamespace
+    fps, n = 25, 300 * 25
+    poses = [SimpleNamespace(id="frontal_neutro_01", vista="frontal", gesto="neutro", tipo="estado", mirada="camara", cuenta=0),
+             SimpleNamespace(id="frontal_explicar_01", vista="frontal", gesto="explicar", tipo="estado", mirada="camara", cuenta=0)]
+    vis = [v for i in range(0, n, 55) for v in (Visema(i, i + 42, "C"), Visema(i + 42, i + 55, "X"))]
+    base = {"cambio": {"prob_plano": 0.0}}                        # sin cambios de plano al azar: solo el límite puede cambiarlos
+    sin = [_planos_de(dirigir(poses, vis, n, fps, "E2", s, cargar_reglas(None, {**base, "planos": {"max_mismo_s": 0}})), n, fps)[1] for s in range(6)]
+    con = [_planos_de(dirigir(poses, vis, n, fps, "E2", s, cargar_reglas(None, {**base, "planos": {"max_mismo_s": 25}})), n, fps)[1] for s in range(6)]
+    assert max(sin) > 100 and max(con) < 25 + 20 + 1             # el máximo es el límite más lo que tarda el corte siguiente (toma_s ≤ 20)
+    proyecto = cargar_reglas(Path(__file__).resolve().parents[2] / "reglas_director.yaml")
+    usados = set()
+    for s in range(12):
+        usados |= set(_planos_de(dirigir(poses, vis, n, fps, "E2", s, proyecto), n, fps)[0])
+    assert usados == {"PL1", "PL2", "PL3", "PL4", "PL5"}
+
+
+def test_max_mismo_s_invalido_se_rechaza():
+    with pytest.raises(ErrorAccionable):
+        cargar_reglas(None, {"planos": {"max_mismo_s": -3}})

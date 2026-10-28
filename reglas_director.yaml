@@ -9,11 +9,12 @@ cambio:
   prob_plano: 0.5          # probabilidad de que un corte sea solo un cambio de plano (misma pose, corte seco). 0 = nunca
 
 planos:                    # cámara virtual: PL1 cuerpo entero ... PL6 primerísimo primer plano
-  permitidos: [PL2, PL3, PL4, PL5]
+  permitidos: [PL1, PL2, PL3, PL4, PL5]
   inicial: PL3
-  paso_maximo: 1           # el plano cambia de a un paso (PL3 -> PL4, nunca PL2 -> PL5)
-  pesos: {PL2: 1.0, PL3: 3.0, PL4: 3.0, PL5: 1.5}    # cuánto se prefiere cada plano
-  evitar_volver: 0.3       # 0 a 1: peso de volver al plano anterior (1 = sin preferencia; evita vaivenes PL3-PL4-PL3-PL4)
+  paso_maximo: 2           # el plano puede saltar hasta dos pasos (PL3 -> PL1 o PL5); con 1 solo camina de a un paso y se queda cerca del centro
+  pesos: {PL1: 1.2, PL2: 2.0, PL3: 2.0, PL4: 2.0, PL5: 2.0}    # cuánto se prefiere cada plano (parejos: ningún plano manda)
+  evitar_volver: 0.5       # 0 a 1: peso de volver al plano anterior (1 = sin preferencia; evita vaivenes PL3-PL4-PL3-PL4)
+  max_mismo_s: 25          # si el plano lleva más de estos segundos igual, el siguiente corte lo cambia (0 = sin límite)
 
 reposo:
   activo: true

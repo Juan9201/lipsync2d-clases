@@ -25,11 +25,12 @@ REGLAS_DEFECTO: Dict[str, object] = {
     "tolerancia_pausa_s": 2,                # cuánto se puede mover un corte para caer en una pausa de la voz
     "cambio": {"prob_plano": 0.5},          # probabilidad de que un corte cambie solo el plano
     "planos": {
-        "permitidos": ["PL2", "PL3", "PL4", "PL5"],
+        "permitidos": ["PL1", "PL2", "PL3", "PL4", "PL5"],
         "inicial": "PL3",
-        "paso_maximo": 1,                   # el plano cambia de a un paso (FR-090)
-        "evitar_volver": 0.3,               # peso al volver al plano anterior (1 = sin preferencia; evita vaivenes A-B-A)
-        "pesos": {"PL2": 1.0, "PL3": 3.0, "PL4": 3.0, "PL5": 1.5},
+        "paso_maximo": 2,                   # el plano salta hasta dos pasos (FR-090); con 1 solo camina de a uno y se queda cerca del centro
+        "evitar_volver": 0.5,               # peso al volver al plano anterior (1 = sin preferencia; evita vaivenes A-B-A)
+        "pesos": {"PL1": 1.2, "PL2": 2.0, "PL3": 2.0, "PL4": 2.0, "PL5": 2.0},
+        "max_mismo_s": 25,                   # 0 = sin límite. Si el plano lleva más de estos segundos, el siguiente corte lo cambia (evita que la cámara se quede pegada)
     },
     "reposo": {"activo": True, "mezcla_frames": 2},     # mezcla entre poses (0 = corte seco)
     "acentos": {"activo": True, "probabilidad": 0.5, "duracion_s": [3, 6], "separacion_min_s": 20},
@@ -113,6 +114,9 @@ def _validar(r: dict, ruta: str) -> dict:
     if not isinstance(p["evitar_volver"], (int, float)) or not 0 <= p["evitar_volver"] <= 1:
         raise ErrorAccionable(f"En {ruta}, «evitar_volver» debe estar entre 0 y 1 (vale {p['evitar_volver']})",
                               "Usa 1 para no preferir ningún plano o un valor bajo para evitar los vaivenes entre dos planos")
+    if not isinstance(p["max_mismo_s"], (int, float)) or isinstance(p["max_mismo_s"], bool) or p["max_mismo_s"] < 0:
+        raise ErrorAccionable(f"En {ruta}, «max_mismo_s» debe ser un número ≥ 0 (vale {p['max_mismo_s']})",
+                              "Usa 0 para no limitar o, por ejemplo, 30 para cambiar de plano si lleva más de 30 s igual")
     if not isinstance(p["paso_maximo"], int) or p["paso_maximo"] < 1:
         raise ErrorAccionable(f"En {ruta}, «paso_maximo» debe ser un entero ≥ 1", "Usa 1 para cambiar de plano de a un paso")
     return r
@@ -302,6 +306,8 @@ def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int,
     log(f"toma 1: frame 0 (0.0 s) - pose {pose.id}, plano {plano} (inicio)")
     ultimo_acento = -10 ** 9
     plano_previo = None                                   # el plano que se dejó en el último cambio de cámara
+    max_mismo = round(pl["max_mismo_s"] * fps)
+    desde_plano = 0                                       # frame en que empezó el plano actual
     en_acento = False
     f = 0
 
@@ -338,12 +344,15 @@ def dirigir(poses: Sequence, visemas: Sequence[Visema], n_frames: int, fps: int,
             return candidatas[int(rng.choice(len(candidatas), p=w / w.sum()))]
 
         quiere_plano = (not en_acento) and (not lateral) and rng.random() < reglas["cambio"]["prob_plano"]
+        if max_mismo and not en_acento and not lateral and corte - desde_plano > max_mismo:
+            quiere_plano = True                           # lleva demasiado en el mismo plano: este corte lo cambia
         vecinos, reposo = planos_vecinos(), poses_de_reposo()
         if quiere_plano and vecinos:
             plano_nuevo = elegir(vecinos, lambda q: pl["pesos"].get(q, 1.0) * (pl["evitar_volver"] if q == plano_previo else 1.0))
             tomas.append(Toma(corte, escenario, pose.id, plano_nuevo, 0))
             log(f"toma {len(tomas)}: frame {corte} ({corte / fps:.1f} s) - plano {plano} -> {plano_nuevo} (cambio de cámara, misma pose {pose.id})")
             plano_previo, plano = plano, plano_nuevo
+            desde_plano = corte
             f = corte
             continue
         if en_acento:                                              # el acento vuelve solo al reposo

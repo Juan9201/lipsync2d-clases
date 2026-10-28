@@ -30,6 +30,12 @@ class Codificador:
         self._errores = None
         self._bytes_frame = ancho * alto * 3
 
+    def _video_cmd(self) -> list:
+        """libx264 (CPU) por defecto. Con la variable LIPSYNC_CODEC=h264_nvenc comprime en la GPU y libera CPU."""
+        if os.environ.get("LIPSYNC_CODEC", "libx264") == "h264_nvenc":
+            return ["-c:v", "h264_nvenc", "-preset", "p5", "-tune", "hq", "-rc", "vbr", "-cq", str(self.crf), "-b:v", "0"]
+        return ["-c:v", "libx264", "-preset", self.preset, "-crf", str(self.crf)]
+
     # ---- ciclo de vida ----
     def __enter__(self) -> "Codificador":
         self.final.parent.mkdir(parents=True, exist_ok=True)
@@ -39,7 +45,7 @@ class Codificador:
                "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{self.ancho}x{self.alto}",
                "-r", str(self.fps), "-i", "-", "-i", str(self.audio),
                "-map", "0:v:0", "-map", "1:a:0",
-               "-c:v", "libx264", "-preset", self.preset, "-crf", str(self.crf), "-pix_fmt", "yuv420p",
+               *self._video_cmd(), "-pix_fmt", "yuv420p",
                *audio_cmd, "-movflags", "+faststart", "-f", "mp4", str(self.parcial)]
         self._errores = tempfile.TemporaryFile()
         self._proceso = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,

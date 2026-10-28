@@ -31,6 +31,7 @@ def main(argv=None) -> int:
     t = Trabajo(id=a.clase, guion=str(raiz / "clases" / f"{a.clase}.txt"), escenarios=a.escenario, idioma=a.idioma)
     p = parametros_de(t, raiz)
     p.tramo_s = (a.desde, a.hasta)
+    p.etiqueta = f"prueba_{a.clase}_{a.desde:.0f}-{a.hasta:.0f}s"        # nombre aparte: nunca se confunde con la clase real en el panel ni en los archivos
     print(renderizar(p, raiz))
     return 0
 

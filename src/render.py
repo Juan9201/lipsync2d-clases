@@ -56,6 +56,7 @@ class ParametrosRender:
     director: bool = False
     reglas: Optional[Path] = None      # archivo de reglas (por defecto, reglas_director.yaml del proyecto si existe)
     plano_inicial: Optional[str] = None
+    etiqueta: Optional[str] = None     # nombre para el log, el seguimiento y los archivos de una prueba; la semilla sigue saliendo de clase_id
     tramo_s: Optional[Tuple[float, float]] = None   # (desde, hasta) en segundos: se decide y analiza la clase entera pero solo se renderiza ese tramo
 
 
@@ -94,14 +95,15 @@ def _a_visemas(frames) -> list:
 def renderizar(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
     """Renderiza una clase y deja su seguimiento en vivo (etapas y cuadros, en ms) para la interfaz."""
     from src.progreso import con_seguimiento
-    with con_seguimiento(Path(raiz), p.clase_id or Path(p.audio).stem):
+    with con_seguimiento(Path(raiz), p.etiqueta or p.clase_id or Path(p.audio).stem):
         return _renderizar_clase(p, raiz)
 
 
 def _renderizar_clase(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
     raiz = Path(raiz)
     clase_id = p.clase_id or Path(p.audio).stem
-    log = obtener_logger("render", archivo=raiz / "logs" / f"{clase_id}.log")
+    nombre = p.etiqueta or clase_id                    # una prueba no comparte log, seguimiento ni archivos con la clase real
+    log = obtener_logger("render", archivo=raiz / "logs" / f"{nombre}.log")
     W, H = p.resolucion
 
     audio = Path(p.audio)
@@ -153,7 +155,7 @@ def _renderizar_clase(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
         log.info("Clase sin guion: se usa una sola toma y el lipsync no recibe texto de apoyo")
 
     with etapa(log, "rhubarb"):
-        wav = raiz / "cache" / "analisis" / f"{clase_id}.wav"
+        wav = raiz / "cache" / "analisis" / f"{nombre}.wav"
         try:
             convertir_para_analisis(audio, wav)
             res = analizar(wav, cache_dir=raiz / "cache", dialogo=texto or None, reconocedor=p.reconocedor)
@@ -229,8 +231,8 @@ def _renderizar_clase(p: ParametrosRender, raiz: Path = rutas.RAIZ) -> Path:
         if p.tramo_s is not None:
             f0 = max(0, min(lt.n_frames - 1, round(p.tramo_s[0] * FPS)))
             f1 = max(f0 + 1, min(lt.n_frames, round(p.tramo_s[1] * FPS)))
-            final = raiz / "salidas" / f"prueba_{clase_id}_{f0 / FPS:.0f}-{f1 / FPS:.0f}s_{date.today():%Y%m%d}.mp4"
-            audio_salida = raiz / "cache" / "analisis" / f"{clase_id}_tramo.wav"
+            final = raiz / "salidas" / f"{nombre}_{date.today():%Y%m%d}.mp4"
+            audio_salida = raiz / "cache" / "analisis" / f"{nombre}_tramo.wav"
             subprocess.run([str(rutas.FFMPEG), "-v", "error", "-y", "-ss", f"{f0 / FPS:.3f}", "-t", f"{(f1 - f0) / FPS:.3f}",
                             "-i", str(audio), str(audio_salida)], check=True)
             duracion_salida = (f1 - f0) / FPS
