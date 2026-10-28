@@ -68,7 +68,20 @@ dialog::backdrop { background:#000a; }
 
 /* ---------- cronómetros en vivo ---------- */
 #envivo { margin:12px 18px 0; }
-.vivo { border:1px solid var(--borde); border-radius:10px; padding:10px 12px; margin-bottom:10px; background:#181b20; }
+#envivo-lista { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:10px; align-items:start; }
+.cola-global { margin-bottom:12px; display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+.cola-global[hidden] { display:none; }
+.cola-global .cola-txt { font-size:14px; margin-bottom:6px; }
+.torta { width:112px; height:112px; border-radius:50%; display:grid; place-items:center; flex:none; transition:background .4s; }
+.torta > div { width:72px; height:72px; border-radius:50%; background:#181b20; display:grid; place-content:center; text-align:center; }
+.torta b { font-size:18px; line-height:1.1; } .torta small { color:var(--suave); font-size:10px; }
+.leyenda { display:flex; flex-wrap:wrap; gap:4px 16px; font-size:12px; color:var(--suave); }
+.leyenda i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; }
+.vivo { border:1px solid var(--borde); border-radius:10px; padding:8px 10px; background:#181b20; min-width:0; }
+.vivo .cab strong { overflow-wrap:anywhere; }
+.vivo .crono { font-size:19px; }
+.vivo .etapas-vivas { font-size:12px; gap:2px 6px; margin-top:6px; }
+.vivo .etapas-vivas .t { font-size:12px; }
 .vivo.en_curso { border-color:var(--acento); }
 .vivo.error, .vivo.sin_senal { border-color:var(--mal); }
 .vivo .cab { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }

@@ -569,7 +569,28 @@ def progreso_en_vivo(raiz: Path) -> dict:
     """Etapas y cuadros de las clases que se están procesando (y las últimas terminadas), con la hora del servidor en ms."""
     from src.progreso import leer_todos
     ahora = int(time.time() * 1000)
-    return {"ahora_ms": ahora, "clases": leer_todos(raiz, ahora_ms=ahora)}
+    return {"ahora_ms": ahora, "clases": leer_todos(raiz, ahora_ms=ahora), "cola": resumen_cola(raiz)}
+
+
+def resumen_cola(raiz: Path) -> dict:
+    """Avance global de la cola: renderizadas, publicadas (con subtítulos, ya en Drive) y por cumplir."""
+    import sqlite3
+    def contar(ruta: Path, tabla: str) -> Dict[str, int]:
+        if not ruta.is_file():
+            return {}
+        con = sqlite3.connect(str(ruta))
+        try:
+            return dict(con.execute(f"SELECT estado, COUNT(*) FROM {tabla} GROUP BY estado").fetchall())
+        except sqlite3.Error:
+            return {}
+        finally:
+            con.close()
+    c = contar(Path(raiz) / "lote" / "cola.db", "trabajos")
+    p = contar(Path(raiz) / "lote" / "publicacion.db", "pub")
+    total = sum(c.values())
+    hechas = c.get("hecho", 0)
+    return {"total": total, "renderizadas": hechas, "en_proceso": c.get("en_proceso", 0), "con_error": c.get("error", 0),
+            "publicadas": p.get("publicado", 0), "por_cumplir": total - hechas}
 
 
 def _abrir_en_explorador(carpeta: Path) -> None:

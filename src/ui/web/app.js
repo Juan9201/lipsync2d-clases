@@ -464,7 +464,29 @@ function tarjetaVivo(c) {
     h("div", { class: "etapas-vivas" }, ...filas), c.error ? h("div", { class: "mal", style: "margin-top:6px" }, c.error) : "");
 }
 
+function pintarCola() {
+  const q = vivo.cola, caja = $("envivo-cola");
+  if (!q || !q.total) { caja.hidden = true; return; }
+  const pct = n => (n * 100 / q.total).toFixed(1);
+  caja.hidden = false;
+  const publ = Math.min(q.publicadas, q.renderizadas), sinPub = q.renderizadas - publ;
+  const pend = Math.max(0, q.total - q.renderizadas - q.en_proceso - q.con_error);
+  const trozos = [["Publicadas en Drive (con subtítulos)", publ, "#4ade80"], ["Renderizadas, falta subtitular/subir", sinPub, "#38bdf8"],
+                  ["En proceso", q.en_proceso, "#fbbf24"], ["Por empezar", pend, "#4b5563"], ["Con error", q.con_error, "#f87171"]];
+  let acum = 0;
+  const gradiente = trozos.filter(t => t[1] > 0).map(t => { const a = acum * 100 / q.total; acum += t[1]; return `${t[2]} ${a}% ${acum * 100 / q.total}%`; }).join(",");
+  caja.replaceChildren(
+    h("div", { class: "torta", style: `background:conic-gradient(${gradiente})`, title: "Avance de la cola" },
+      h("div", {}, h("b", {}, `${pct(q.renderizadas)}%`), h("small", {}, "renderizado"))),
+    h("div", { class: "cola-der" },
+      h("div", { class: "cola-txt" },
+        h("strong", {}, `Cola: ${q.renderizadas} de ${q.total} clases renderizadas (${pct(q.renderizadas)} %)`),
+        ` · por cumplir ${q.por_cumplir} (${pct(q.por_cumplir)} %)`),
+      h("div", { class: "leyenda" }, ...trozos.filter(t => t[1] > 0).map(t =>
+        h("span", {}, h("i", { style: `background:${t[2]}` }), `${t[0]}: ${t[1]} (${pct(t[1])} %)`)))));
+}
 function pintarVivo() {
+  pintarCola();
   const pestana = document.querySelector("#pestanas button.activa").dataset.p;
   const lista = vivo.clases.filter(c => c.estado === "en_curso").concat(vivo.clases.filter(c => c.estado !== "en_curso").slice(0, 3));
   $("envivo").hidden = !(lista.length && (pestana === "render" || pestana === "lote"));
@@ -478,7 +500,7 @@ function tic() {                                                  // entre consu
 async function consultarVivo() {
   try {
     const d = await api("/api/progreso");
-    vivo.clases = d.clases; vivo.desfase = Date.now() - d.ahora_ms; vivo.hayEnCurso = d.clases.some(c => c.estado === "en_curso");
+    vivo.clases = d.clases; vivo.cola = d.cola; vivo.desfase = Date.now() - d.ahora_ms; vivo.hayEnCurso = d.clases.some(c => c.estado === "en_curso");
     pintarVivo();
   } catch (e) {                                                   // sin servidor: los cronómetros seguirían corriendo solos, así que se avisa
     vivo.hayEnCurso = false;
